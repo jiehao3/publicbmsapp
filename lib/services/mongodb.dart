@@ -81,6 +81,7 @@ class MongoService {
         headers: _headers,
         body: jsonEncode(settings),
       );
+      print(settings);
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
@@ -385,8 +386,14 @@ class MongoService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // 🛠 Fix: Access the inner settings object
-        final innerSettings = data['settings']?['settings'] ?? {};
+        // Corrected Fix: Access the top-level settings object
+        final innerSettings = data['settings'] ?? {};
+        print('Retrieved Smart Temperature Control Settings:');
+        print('  Smart Temp Control: ${innerSettings['smartTempControl'] ?? 'NONE'}');
+        print('  Min Temp: ${innerSettings['setPointTempRange']?['min']?.toDouble() ?? 'NONE'}');
+        print('  Max Temp: ${innerSettings['setPointTempRange']?['max']?.toDouble() ?? 'NONE'}');
+        print('  Desired Temp: ${innerSettings['desiredRoomTemp']?.toDouble() ?? 'NONE'}');
+        print('${innerSettings['dailySettings']}');
 
         return {
           'smart_temp_control': innerSettings['smartTempControl'] ?? false,
@@ -396,40 +403,74 @@ class MongoService {
           'daily_settings': {
             'monday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['monday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['monday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['monday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['monday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['monday']?['autoSwitchOffTime']
+              ),
             },
             'tuesday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['tuesday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['tuesday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['tuesday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['tuesday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['tuesday']?['autoSwitchOffTime']
+              ),
             },
             'wednesday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['wednesday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['wednesday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['wednesday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['wednesday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['wednesday']?['autoSwitchOffTime']
+              ),
             },
             'thursday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['thursday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['thursday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['thursday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['thursday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['thursday']?['autoSwitchOffTime']
+              ),
             },
             'friday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['friday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['friday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['friday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['friday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['friday']?['autoSwitchOffTime']
+              ),
             },
             'saturday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['saturday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['saturday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['saturday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['saturday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['saturday']?['autoSwitchOffTime']
+              ),
             },
             'sunday': {
               'preCoolingEnabled': innerSettings['dailySettings']?['sunday']?['preCoolingEnabled'] ?? false,
-              'preCoolingTime': innerSettings['dailySettings']?['sunday']?['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['sunday']?['preCoolingTime']
+              ),
               'autoSwitchOffEnabled': innerSettings['dailySettings']?['sunday']?['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(
+                  innerSettings['dailySettings']?['sunday']?['autoSwitchOffTime']
+              ),
             },
-            // Repeat for tuesday, wednesday, etc.
           }
         };
       } else {
@@ -445,18 +486,20 @@ class MongoService {
   static Future<void> close() async {
     print('🛑 API Client closed');
   }
-  static double _parseTimeStringToDouble(String? timeStr) {
-    if (timeStr == null || timeStr.isEmpty) return 7.0;
+  static double _parseTimeStringToDouble(dynamic timeValue) {
+    if (timeValue is double) return timeValue;
+    if (timeValue is int) return timeValue.toDouble();
 
-    final parts = timeStr.split(':');
-    if (parts.length != 2) return 7.0;
-
-    try {
-      int hour = int.parse(parts[0]);
-      int minute = int.parse(parts[1]);
-      return hour + minute / 60.0; // e.g., "08:30" → 8.5
-    } catch (e) {
-      return 7.0;
+    if (timeValue is String) {
+      final parts = timeValue.split(':');
+      if (parts.length == 2) {
+        try {
+          final hour = int.parse(parts[0]);
+          return hour.toDouble();
+        } catch (_) {}
+      }
     }
+    return 7.0; // Default value
   }
+
 }

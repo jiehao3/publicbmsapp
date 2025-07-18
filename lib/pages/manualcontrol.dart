@@ -61,6 +61,7 @@ class _ManualControlTabState extends State<ManualControlTab>
         'preCoolingEnabled': day['id'] == 'monday' || day['id'] == 'tuesday',
         'preCoolingTime': 7.0,
         'autoSwitchOffEnabled': day['id'] != 'sunday',
+        'autoSwitchOffTime': 17.0, // Default: 5 PM
       };
     }
   }
@@ -129,8 +130,9 @@ class _ManualControlTabState extends State<ManualControlTab>
 
             settings[dayId] = {
               'preCoolingEnabled': dayData['preCoolingEnabled'] ?? false,
-              'preCoolingTime': dayData['preCoolingTime']?.toDouble() ?? 7.0,
+              'preCoolingTime': _parseTimeStringToDouble(dayData['preCoolingTime']),
               'autoSwitchOffEnabled': dayData['autoSwitchOffEnabled'] ?? false,
+              'autoSwitchOffTime': _parseTimeStringToDouble(dayData['autoSwitchOffTime']) ?? 17.0,
             };
           }
 
@@ -156,7 +158,6 @@ class _ManualControlTabState extends State<ManualControlTab>
 
   Future<void> _saveScheduleSettings() async {
     setState(() => isLoading = true);
-
     try {
       // Format settings to match website's structure
       final settingsPayload = {
@@ -171,12 +172,14 @@ class _ManualControlTabState extends State<ManualControlTab>
             for (var day in daysOfWeek)
               day['id']: {
                 'preCoolingEnabled': settings[day['id']]!['preCoolingEnabled'],
-                'preCoolingTime': settings[day['id']]!['preCoolingTime'],
+                'preCoolingTime': _formatTime(settings[day['id']]!['preCoolingTime']),
                 'autoSwitchOffEnabled': settings[day['id']]!['autoSwitchOffEnabled'],
+                'autoSwitchOffTime': _formatTime(settings[day['id']]!['autoSwitchOffTime']),
               }
           }
         }
       };
+
       // Use dynamic floorPlanId based on building
       String floorPlanId = '6747dd49c8a6a398ccff24e0'; // Default
       if (widget.building == 'SPGG') {
@@ -184,11 +187,9 @@ class _ManualControlTabState extends State<ManualControlTab>
       } else if (widget.building == 'W512') {
         floorPlanId = '6747dd49c8a6a398ccff24e0';
       }
+
       // Call MongoDB service to save settings
-      await MongoService.saveSettings(
-          floorPlanId, // floorPlanId - should be dynamic if needed
-          settingsPayload
-      );
+      await MongoService.saveSettings(floorPlanId, settingsPayload);
 
       setState(() => isLoading = false);
 
@@ -196,7 +197,6 @@ class _ManualControlTabState extends State<ManualControlTab>
       AnimatedFeedback.showSuccess(context);
     } catch (e) {
       setState(() => isLoading = false);
-      // Show error message
       AnimatedFeedback.showError(context);
     }
   }
@@ -218,7 +218,7 @@ class _ManualControlTabState extends State<ManualControlTab>
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
     return Container(
-      height: MediaQuery.of(context).size.height - 100,
+      height: MediaQuery.of(context).size.height - 120,
       child: Column(
         children: [
           // Enhanced Tab Bar
@@ -349,7 +349,7 @@ class _ManualControlTabState extends State<ManualControlTab>
 
   Widget _buildScheduleTab(double bottomPadding) {
     return SingleChildScrollView(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding + 80),
+      padding: EdgeInsets.fromLTRB(20, 0, 20, bottomPadding + 100),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -448,7 +448,7 @@ class _ManualControlTabState extends State<ManualControlTab>
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(10, 0, 10,  bottomPadding + 24),
+          padding: EdgeInsets.fromLTRB(10, 0, 10,  bottomPadding + 80),
           child: Column(
             children: [
               // FC Units Section
@@ -1496,8 +1496,8 @@ class _ManualControlTabState extends State<ManualControlTab>
                           ),
                           child: Slider(
                             min: 0,
-                            max: 23.5,
-                            divisions: 47,
+                            max: 23,
+                            divisions: 23,
                             value: settings[activeDay]!['preCoolingTime'],
                             label: _formatTimeOfDay(settings[activeDay]!['preCoolingTime']),
                             onChanged: (value) {
@@ -1513,6 +1513,7 @@ class _ManualControlTabState extends State<ManualControlTab>
                 ],
                 const SizedBox(height: 16),
                 // Auto Switch Off Setting
+                // Auto Switch Off Setting
                 _buildDaySettingTile(
                   icon: Icons.power_settings_new_rounded,
                   title: 'Auto Switch Off',
@@ -1523,6 +1524,77 @@ class _ManualControlTabState extends State<ManualControlTab>
                     });
                   },
                 ),
+                if (settings[activeDay]!['autoSwitchOffEnabled']) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: borderColor),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.access_time_rounded, color: primaryBlue, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Switch off time:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textDark,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: lightBlue,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                _formatTimeOfDay(settings[activeDay]!['autoSwitchOffTime']),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: darkBlue,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        SliderTheme(
+                          data: SliderThemeData(
+                            activeTrackColor: primaryBlue,
+                            inactiveTrackColor: lightBlue,
+                            thumbColor: white,
+                            overlayColor: primaryBlue.withOpacity(0.2),
+                            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                            overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                          ),
+                          child: Slider(
+                            min: 0,
+                            max: 23,
+                            divisions: 23,
+                            value: settings[activeDay]!['autoSwitchOffTime'],
+                            label: _formatTimeOfDay(settings[activeDay]!['autoSwitchOffTime']),
+                            onChanged: (value) {
+                              setState(() {
+                                settings[activeDay]!['autoSwitchOffTime'] = value;
+                              });
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1655,4 +1727,33 @@ class _ManualControlTabState extends State<ManualControlTab>
       ),
     );
   }
+}
+String _formatTime(double hours) {
+  int hour = hours.toInt();
+  int minute = ((hours - hour) * 60).toInt();
+  return "${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}";
+}
+
+double _parseTimeStringToDouble(dynamic timeValue) {
+  if (timeValue == null) return 7.0;
+
+  // If it's already a double, return it
+  if (timeValue is double) return timeValue;
+  if (timeValue is int) return timeValue.toDouble();
+
+  // If it's a string, parse it
+  if (timeValue is String) {
+    final parts = timeValue.split(':');
+    if (parts.length != 2) return 7.0;
+
+    try {
+      int hour = int.parse(parts[0]);
+      int minute = int.parse(parts[1]);
+      return hour + minute / 60.0; // e.g., "08:30" → 8.5
+    } catch (e) {
+      return 7.0;
+    }
+  }
+
+  return 7.0;
 }

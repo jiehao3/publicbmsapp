@@ -1042,6 +1042,22 @@ class _SummaryPageState extends State<SummaryPage> {
         return _capitalize(range);
     }
   }
+  IconData _getTabIcon(int index) {
+    switch (index) {
+      case 0: // Overview
+        return Icons.dashboard_outlined;
+      case 1: // Charts
+        return Icons.bar_chart_outlined;
+      case 2: // Calendar
+        return Icons.calendar_today_outlined;
+      case 3: // Settings
+        return Icons.settings_outlined;
+      case 4: // Survey
+        return Icons.poll_outlined;
+      default:
+        return Icons.dashboard_outlined;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1149,20 +1165,14 @@ class _SummaryPageState extends State<SummaryPage> {
                               ),
                             ),
                             alignment: Alignment.center,
-                            child: Text(
-                              _tabLabels[i],
-                              style: TextStyle(
-                                color: sel ? white : textLight,
-                                fontSize: _getResponsiveValue(context,
-                                    mobile: 12,
-                                    tablet: 14,
-                                    desktop: 16
-                                ),
-                                fontWeight: sel ? FontWeight.w600 : FontWeight.w500,
+                            child: Icon(
+                              _getTabIcon(i),
+                              color: sel ? white : textLight,
+                              size: _getResponsiveValue(context,
+                                  mobile: 18,
+                                  tablet: 20,
+                                  desktop: 22
                               ),
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
