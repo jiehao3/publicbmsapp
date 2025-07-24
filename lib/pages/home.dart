@@ -348,8 +348,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 ),
                 SizedBox(height: responsiveScale(context, 8)),
                 SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.54,
-                  height: responsiveScale(context, 55),
+                  width: MediaQuery.of(context).size.width * 0.45,
+                  height: responsiveScale(context, 45),
                   child: ElevatedButton.icon(
                     onPressed: _showFilterBottomSheet,
                     icon: Icon(Icons.filter_alt, color: Colors.black, size: responsiveScale(context, 20)),
@@ -379,8 +379,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         Padding(
           padding: EdgeInsets.symmetric(horizontal: responsiveScale(context, 16), vertical: responsiveScale(context, 0)),
           child: SizedBox(
-            width: MediaQuery.of(context).size.width * 0.54,
-            height: responsiveScale(context, 55),
+            width: MediaQuery.of(context).size.width * 0.45,
+            height: responsiveScale(context, 45),
             child: ElevatedButton.icon(
               onPressed: _toggleMapView,
               icon: Icon(Icons.map, color: Colors.white, size: responsiveScale(context, 20)),
@@ -491,7 +491,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             },
           ),
           children: [
-            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/ {z}/{x}/{y}.png'),
+            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
             MarkerLayer(
               markers: [
                 if (_currentPosition != null)

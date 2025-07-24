@@ -32,6 +32,29 @@ class _EnergyTabState extends State<EnergyTab>
     'humidity',
     'occupancy'
   ];
+  bool _showEnergySavings = false;
+  final Map<String, Map<String, double>> _dummyPredictionData = {
+    // Use today's date as key
+    DateFormat('EEE MMM dd yyyy').format(DateTime.now()): {
+      // 8:00 AM - 8:30 AM cycle (every 10 minutes)
+      '08:00': 1.2,
+      '08:10': 1.6,
+      '08:20': 1.1,
+      '08:30': 1.8,
+
+      // 2:00 PM - 2:30 PM cycle
+      '14:00': 2.4,
+      '14:10': 2.8,
+      '14:20': 2.1,
+      '14:30': 2.7,
+
+      // 8:00 PM - 8:30 PM cycle
+      '20:00': 1.8,
+      '20:10': 1.1,
+      '20:20': 2.5,
+      '20:30': 2.2,
+    },
+  };
 
   // Consistent color scheme
   static const Color _primaryColor = Color(0xFF2563EB);
@@ -282,7 +305,7 @@ class _EnergyTabState extends State<EnergyTab>
   String _getMetricTitle(String metric) {
     switch (metric) {
       case 'energy':
-        return 'Energy Consumption';
+        return 'Energy';
       case 'temperature':
         return 'Temperature';
       case 'humidity':
@@ -290,7 +313,7 @@ class _EnergyTabState extends State<EnergyTab>
       case 'occupancy':
         return 'Occupancy';
       default:
-        return 'Energy Consumption';
+        return 'Consumption';
     }
   }
 
@@ -373,20 +396,74 @@ class _EnergyTabState extends State<EnergyTab>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Graph Title
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${_getMetricTitle(_selectedMetric)} Trend',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
+            // Graph Title with AI Savings Toggle
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${_getMetricTitle(_selectedMetric)}',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        fontSize: MediaQuery.of(context).size.width * 0.045, // 4.5% of screen width
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                // Only show for energy metric
+                if (_selectedMetric == 'energy')
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _showEnergySavings = !_showEnergySavings;
+                      });
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: MediaQuery.of(context).size.width * 0.032, // ~12-16px depending on screen
+                        vertical: MediaQuery.of(context).size.width * 0.016,   // ~6-8px depending on screen
+                      ),
+                      decoration: BoxDecoration(
+                        color: _showEnergySavings ? Colors.orange.withOpacity(0.1) : Colors.grey.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: _showEnergySavings ? Colors.orange : Colors.grey,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.eco_outlined,
+                            size: MediaQuery.of(context).size.width * 0.042, // ~15-18px depending on screen
+                            color: _showEnergySavings ? Colors.orange : Colors.grey,
+                          ),
+                          SizedBox(width: MediaQuery.of(context).size.width * 0.016), // ~6px
+                          Text(
+                            'AI Savings',
+                            style: TextStyle(
+                              fontSize: MediaQuery.of(context).size.width * 0.032, // ~12-14px depending on screen
+                              fontWeight: FontWeight.w500,
+                              color: _showEnergySavings ? Colors.orange : Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
             ),
+            if (_showEnergySavings && _selectedMetric == 'energy') ...[
+              const SizedBox(height: 16),
+              _buildEnergySavingsCard(),
+            ],
             const SizedBox(height: 16),
             // Line Chart
             SizedBox(
@@ -406,6 +483,43 @@ class _EnergyTabState extends State<EnergyTab>
       ),
     );
   }
+  Widget _buildEnergySavingsCard() {
+    final savings = _calculateEnergySavings();
+    final totalSavings = savings['totalSavings']!;
+    final percentageSavings = savings['percentageSavings']!;
+
+    return Container(
+      padding: const EdgeInsets.all(12), // Reduced from 16 to 12
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12), // Reduced from 16 to 12
+        color: Colors.white, // Changed to white background
+        border: Border.all(color: Colors.black.withOpacity(0.3), width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          Row(
+            children: [
+
+              const SizedBox(height: 6), // Reduced from 8 to 6
+              Text(
+                'AI Predicted Savings: ${percentageSavings.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontSize: MediaQuery.of(context).size.width * 0.037, // Dynamic font size
+                  fontWeight: FontWeight.w700,
+                  color: percentageSavings >= 0 ? Colors.green : Colors.red,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              Icon(Icons.trending_down_outlined, color: percentageSavings >= 0 ? Colors.green : Colors.red, size: 20), // Reduced from 24 to 20
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildSummaryCards(double total, double average, double peak, String unit) {
     String formatValue(double value) {
@@ -638,6 +752,7 @@ class _EnergyTabState extends State<EnergyTab>
         },
       ),
       lineBarsData: [
+        // Existing LineChartBarData stays exactly the same...
         LineChartBarData(
           spots: data.asMap().entries.map((entry) {
             final index = entry.key;
@@ -672,6 +787,35 @@ class _EnergyTabState extends State<EnergyTab>
             ),
           ),
         ),
+
+        // ADD THIS NEW LineChartBarData for AI savings:
+        if (_showEnergySavings && _selectedMetric == 'energy')
+          LineChartBarData(
+            spots: data.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              final actualValue = _toDouble(item[_selectedMetric]);
+              final predictedSavings = _calculatePredictedSavings(index, actualValue);
+              return FlSpot(index.toDouble(), predictedSavings * _animation.value);
+            }).toList(),
+            isCurved: true,
+            color: Colors.orange,
+            barWidth: 2,
+            isStrokeCapRound: true,
+            dashArray: [5, 5], // Dashed line for predictions
+            dotData: FlDotData(show: false),
+            belowBarData: BarAreaData(
+              show: true,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.orange.withOpacity(0.2), // Change from green
+                  Colors.orange.withOpacity(0.05), // Change from green
+                ],
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -696,6 +840,79 @@ class _EnergyTabState extends State<EnergyTab>
     if (maxValue <= 20) return 4;
     if (maxValue <= 50) return 10;
     return (maxValue / 5).ceilToDouble();
+  }
+  double _calculatePredictedSavings(int index, double actualValue) {
+    // Only works for hourly (today) data
+    if (widget.currentFilter != 'today') {
+      return actualValue;
+    }
+
+    // Get today's date in the same format as sensor data
+    final today = DateFormat('EEE MMM dd yyyy').format(DateTime.now());
+
+    // Check if we have prediction data for today
+    if (!_dummyPredictionData.containsKey(today)) {
+      return actualValue;
+    }
+
+    final todayPredictions = _dummyPredictionData[today]!;
+    final timeLabel = '${index.toString().padLeft(2, '0')}:00';
+
+    // Check if we have prediction data for this exact time
+    if (todayPredictions.containsKey(timeLabel)) {
+      return todayPredictions[timeLabel]!;
+    }
+
+    // Check for 10-minute intervals within this hour
+    final hour10 = '${index.toString().padLeft(2, '0')}:10';
+    final hour20 = '${index.toString().padLeft(2, '0')}:20';
+    final hour30 = '${index.toString().padLeft(2, '0')}:30';
+
+    final predictions = [
+      todayPredictions[timeLabel],
+      todayPredictions[hour10],
+      todayPredictions[hour20],
+      todayPredictions[hour30],
+    ].where((pred) => pred != null).cast<double>().toList();
+
+    if (predictions.isNotEmpty) {
+      return predictions.reduce((a, b) => a + b) / predictions.length;
+    }
+
+    return actualValue; // No prediction data available
+  }
+  Map<String, double> _calculateEnergySavings() {
+    if (_selectedMetric != 'energy' || !_showEnergySavings) {
+      return {'totalSavings': 0.0, 'percentageSavings': 0.0};
+    }
+
+    final data = _getAggregatedReadings();
+    double totalActual = 0.0;
+    double totalPredicted = 0.0;
+    int dataPoints = 0;
+
+    for (int i = 0; i < data.length; i++) {
+      final actualValue = _toDouble(data[i][_selectedMetric]);
+      final predictedValue = _calculatePredictedSavings(i, actualValue);
+
+      if (predictedValue != actualValue) { // Only count where we have prediction data
+        totalActual += actualValue;
+        totalPredicted += predictedValue;
+        dataPoints++;
+      }
+    }
+
+    if (dataPoints == 0 || totalPredicted == 0) {
+      return {'totalSavings': 0.0, 'percentageSavings': 0.0};
+    }
+
+    final totalSavings = totalPredicted - totalActual;
+    final percentageSavings = (totalSavings / totalPredicted) * 100;
+
+    return {
+      'totalSavings': totalSavings,
+      'percentageSavings': percentageSavings,
+    };
   }
 }
 

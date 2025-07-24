@@ -571,6 +571,7 @@ class _OverviewTabState extends State<OverviewTab> {
       child: Column(
         children: [
           // Header
+          // Header
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
             decoration: BoxDecoration(
@@ -582,61 +583,55 @@ class _OverviewTabState extends State<OverviewTab> {
               children: [
                 Expanded(
                   flex: 2,
-                  child: Text(
-                    isYear ? 'Month' : (isToday ? 'Time Period' : 'Date'),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        isYear ? Icons.calendar_month : (isToday ? Icons.access_time : Icons.calendar_today),
+                        size: 16,
+                        color: Colors.black87,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isYear ? 'Month' : (isToday ? 'Time' : 'Date'),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
                   flex: 1,
-                  child: Text(
-                    'Energy (kWh)',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF3498DB),
-                    ),
-                    textAlign: TextAlign.center,
+                  child: Icon(
+                    Icons.bolt,
+                    size: 18,
+                    color: Color(0xFF3498DB),
                   ),
                 ),
                 Expanded(
                   flex: 1,
-                  child: Text(
-                    'Temp (°C)',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFFE74C3C),
-                    ),
-                    textAlign: TextAlign.center,
+                  child: Icon(
+                    Icons.thermostat,
+                    size: 18,
+                    color: Color(0xFFE74C3C),
                   ),
                 ),
                 Expanded(
                   flex: 1,
-                  child: Text(
-                    'Humidity (%)',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFF1ABC9C),
-                    ),
-                    textAlign: TextAlign.center,
+                  child: Icon(
+                    Icons.water_drop,
+                    size: 18,
+                    color: Color(0xFF1ABC9C),
                   ),
                 ),
                 Expanded(
                   flex: 1,
-                  child: Text(
-                    'Occupancy',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: Color(0xFFFF9800),
-                    ),
-                    textAlign: TextAlign.center,
+                  child: Icon(
+                    Icons.group,
+                    size: 18,
+                    color: Color(0xFFFF9800),
                   ),
                 ),
               ],

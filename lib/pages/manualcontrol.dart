@@ -1540,7 +1540,7 @@ class _ManualControlTabState extends State<ManualControlTab>
                             Icon(Icons.access_time_rounded, color: primaryBlue, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              'Switch off time:',
+                              'Auto-Off:',
                               style: TextStyle(
                                 fontWeight: FontWeight.w600,
                                 color: textDark,

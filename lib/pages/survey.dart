@@ -149,7 +149,7 @@ class _SurveyFeedbackTabState extends State<SurveyFeedbackTab> with SingleTicker
             Expanded(
               child: GestureDetector(
                 onTap: () {
-                  HapticFeedback.lightImpact();
+
                   setState(() => _selectedFilter = 'Today');
                 },
                 child: Container(
@@ -195,7 +195,7 @@ class _SurveyFeedbackTabState extends State<SurveyFeedbackTab> with SingleTicker
             Expanded(
               child: GestureDetector(
                 onTap: () {
-                  HapticFeedback.lightImpact();
+
                   setState(() => _selectedFilter = 'Past');
                 },
                 child: Container(
@@ -249,7 +249,7 @@ class _SurveyFeedbackTabState extends State<SurveyFeedbackTab> with SingleTicker
     return Expanded(
       child: GestureDetector(
         onTap: () {
-          HapticFeedback.lightImpact();
+
           setState(() => _selectedFilter = label);
         },
         child: AnimatedContainer(

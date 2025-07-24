@@ -19,6 +19,8 @@ class _SchedulingTabState extends State<SchedulingTab>
   List<Map<String, dynamic>> _allEvents = [];
   DateTime _displayedMonth = DateTime.now();
   bool _isDaySelected = true; // Set to true initially to select today's date
+  bool _isCalendarView = true; // Add this line
+
 
 
   @override
@@ -64,23 +66,6 @@ class _SchedulingTabState extends State<SchedulingTab>
     }
   }
 
-  List<Map<String, dynamic>> _getFilteredEvents() {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return _allEvents.where((e) {
-      final eventDate = DateTime.tryParse(e['date'] ?? '');
-      if (eventDate == null) return false;
-      final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
-      if (_selectedFilter == 'Today') {
-        return eventDay.isAtSameMomentAs(today);
-      } else if (_selectedFilter == 'Upcoming') {
-        return eventDay.isAfter(today);
-      } else if (_selectedFilter == 'Past') {
-        return eventDay.isBefore(today);
-      }
-      return true;
-    }).toList();
-  }
 
   List<Map<String, dynamic>> _getEventsForDate(DateTime date) {
     final targetDate = DateTime(date.year, date.month, date.day);
@@ -116,7 +101,7 @@ class _SchedulingTabState extends State<SchedulingTab>
       elevation: 3,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.all(13.0),
         child: Column(
           children: [
             Row(
@@ -131,132 +116,143 @@ class _SchedulingTabState extends State<SchedulingTab>
                     MediaQuery.of(context).size.width < 400 ? 20 : 23,
                   ),
                 ),
+                // Add view toggle buttons
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,  // Changed from Colors.grey.shade200
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [  // Add this shadow
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          Icons.calendar_month,
+                          color: _isCalendarView ? Colors.white : Colors.grey.shade600,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(() => _isCalendarView = true),
+                        style: IconButton.styleFrom(
+                          backgroundColor: _isCalendarView ? const Color(0xFF2563EB) : Colors.transparent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          minimumSize: const Size(36, 36),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.list,
+                          color: !_isCalendarView ? Colors.white : Colors.grey.shade600,
+                          size: 20,
+                        ),
+                        onPressed: () => setState(() => _isCalendarView = false),
+                        style: IconButton.styleFrom(
+                          backgroundColor: !_isCalendarView ? const Color(0xFF2563EB) : Colors.transparent,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          minimumSize: const Size(36, 36),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
             SizedBox(height: MediaQuery.of(context).size.height * 0.02),
-            Container(
-              height: MediaQuery.of(context).size.height * 0.35, // 35% of screen height
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black12,
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  )
+            if (_isCalendarView) ...[
+              Container(
+                height: MediaQuery.of(context).size.height * 0.35,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12,
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    )
+                  ],
+                ),
+                child: _buildCalendar(context),
+              ),
+              SizedBox(height: MediaQuery.of(context).size.height * 0.025),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _MonthSelector(
+                    selectedMonth: _displayedMonth,
+                    onMonthChanged: (newMonth) {
+                      setState(() {
+                        _displayedMonth = newMonth;
+                        _isDaySelected = false;
+                        _selectedDate = DateTime(0);
+                      });
+                    },
+                  ),
                 ],
               ),
-              child: _buildCalendar(context),
-            ),
-            SizedBox(height: MediaQuery.of(context).size.height * 0.025),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _MonthSelector(
-                  selectedMonth: _displayedMonth,
-                  onMonthChanged: (newMonth) {
-                    setState(() {
-                      _displayedMonth = newMonth;
-                      _isDaySelected = false;
-                      _selectedDate = DateTime(0); // Reset to an invalid date
-                    });
-                  },
-                ),
-
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FilterChip(
-                  label: Text(
-                    'Today',
-                    style: TextStyle(
-                      fontSize: MediaQuery.of(context).size.width < 350 ? 11 :
-                      MediaQuery.of(context).size.width < 400 ? 12 : 13,
-                      color: _selectedFilter == 'Today' ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.w600,
+              const SizedBox(height: 16),
+            ],
+            if (!_isCalendarView) ...[
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  selected: _selectedFilter == 'Today',
-                  onSelected: (_) => setState(() => _selectedFilter = 'Today'),
-                  selectedColor: const Color(0xFF2563EB), // Solid custom blue
-                  backgroundColor: Colors.grey.shade200,
-                  labelStyle: TextStyle(
-                    color: _selectedFilter == 'Today' ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  side: BorderSide(
-                    color: _selectedFilter == 'Today' ? const Color(0xFF2563EB) : Colors.transparent,
-                    width: 1.5,
-                  ),
+                  ],
                 ),
-                SizedBox(width: MediaQuery.of(context).size.width < 350 ? 4 : 8),
-                FilterChip(
-                  label: Text(
-                    'Upcoming',
-                    style: TextStyle(
-                      fontSize: MediaQuery.of(context).size.width < 350 ? 11 :
-                      MediaQuery.of(context).size.width < 400 ? 12 : 13,
-                      color: _selectedFilter == 'Upcoming' ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  selected: _selectedFilter == 'Upcoming',
-                  onSelected: (_) => setState(() => _selectedFilter = 'Upcoming'),
-                  selectedColor: const Color(0xFF2563EB),
-                  backgroundColor: Colors.grey.shade200,
-                  labelStyle: TextStyle(
-                    color: _selectedFilter == 'Upcoming' ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  side: BorderSide(
-                    color: _selectedFilter == 'Upcoming' ? const Color(0xFF2563EB) : Colors.transparent,
-                    width: 1.5,
-                  ),
+                padding: const EdgeInsets.all(4),
+                child: Row(
+                  children: [
+                    Expanded(child: _buildImprovedFilterButton('Today')),
+                    Expanded(child: _buildImprovedFilterButton('Upcoming')),
+                    Expanded(child: _buildImprovedFilterButton('Past')),
+                  ],
                 ),
-                SizedBox(width: MediaQuery.of(context).size.width < 350 ? 4 : 8),
-                FilterChip(
-                  label: Text(
-                    'Past',
-                    style: TextStyle(
-                      fontSize: MediaQuery.of(context).size.width < 350 ? 11 :
-                      MediaQuery.of(context).size.width < 400 ? 12 : 13,
-                      color: _selectedFilter == 'Past' ? Colors.white : Colors.black87,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  selected: _selectedFilter == 'Past',
-                  onSelected: (_) => setState(() => _selectedFilter = 'Past'),
-                  selectedColor: const Color(0xFF2563EB),
-                  backgroundColor: Colors.grey.shade200,
-                  labelStyle: TextStyle(
-                    color: _selectedFilter == 'Past' ? Colors.white : Colors.black87,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  side: BorderSide(
-                    color: _selectedFilter == 'Past' ? const Color(0xFF2563EB) : Colors.transparent,
-                    width: 1.5,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-            _buildEventList(context, _getFilteredEvents()),
+              ),
+              const SizedBox(height: 20),
+            ],
+            _isCalendarView
+                ? _buildTodayEventsSection(context)
+                : _buildEnhancedListView(context),
           ],
+        ),
+      ),
+    );
+  }
+  Widget _buildImprovedFilterButton(String filter) {
+    final isSelected = _selectedFilter == filter;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFilter = filter),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.all(2),
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF2563EB) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 200),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: isSelected ? Colors.white : Colors.black87,
+            ),
+            child: Text(filter),
+          ),
         ),
       ),
     );
@@ -429,6 +425,126 @@ class _SchedulingTabState extends State<SchedulingTab>
       ],
     );
   }
+  Widget _buildTodayEventsSection(BuildContext context) {
+    final today = DateTime.now();
+    final todayEvents = _allEvents.where((e) {
+      final eventDate = DateTime.tryParse(e['date'] ?? '');
+      if (eventDate == null) return false;
+      final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
+      final todayDay = DateTime(today.year, today.month, today.day);
+      return eventDay.isAtSameMomentAs(todayDay);
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (todayEvents.isEmpty)
+            const SizedBox.shrink()
+        else
+          ...todayEvents.map((event) => Container(
+            margin: const EdgeInsets.only(bottom: 12, left: 8, right: 8),
+            child: Card(
+              elevation: 0,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Colors.grey.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF2563EB).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        event['finished'] == true ? Icons.check_circle : Icons.schedule,
+                        color: event['finished'] == true ? Colors.green : const Color(0xFF2563EB),
+                        size: MediaQuery.of(context).size.width < 350 ? 20 :
+                        MediaQuery.of(context).size.width < 400 ? 22 : 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event['title'] ?? 'Untitled Event',
+                            style: TextStyle(
+                              fontSize: MediaQuery.of(context).size.width < 350 ? 14 :
+                              MediaQuery.of(context).size.width < 400 ? 15 : 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Icon(
+                                  Icons.access_time,
+                                  size: MediaQuery.of(context).size.width < 350 ? 14 :
+                                  MediaQuery.of(context).size.width < 400 ? 15 : 16,
+                                  color: Colors.grey.shade600
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${event['startTime']} - ${event['endTime']}',
+                                style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: MediaQuery.of(context).size.width < 350 ? 12 :
+                                    MediaQuery.of(context).size.width < 400 ? 13 : 14
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              Icon(
+                                  Icons.thermostat,
+                                  size: MediaQuery.of(context).size.width < 350 ? 14 :
+                                  MediaQuery.of(context).size.width < 400 ? 15 : 16,
+                                  color: Colors.grey.shade600
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${event['temp']}°C',
+                                style: TextStyle(
+                                    color: Colors.grey.shade600,
+                                    fontSize: MediaQuery.of(context).size.width < 350 ? 12 :
+                                    MediaQuery.of(context).size.width < 400 ? 13 : 14
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (event['finished'] == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          'Completed',
+                          style: TextStyle(
+                            fontSize: MediaQuery.of(context).size.width < 350 ? 10 :
+                            MediaQuery.of(context).size.width < 400 ? 11 : 12,
+                            color: Colors.green,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          )).toList(),
+      ],
+    );
+  }
 
   void _showDayEventsDialog(BuildContext context, DateTime date) {
     final eventsForDay = _getEventsForDate(date);
@@ -445,13 +561,13 @@ class _SchedulingTabState extends State<SchedulingTab>
           ),
         ),
         content: SizedBox(
-          width: double.maxFinite,
+          width: MediaQuery.of(context).size.width * 1.5,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (eventsForDay.isEmpty)
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(0),
                   child: Text(
                     'No events scheduled for this day',
                     style: TextStyle(
@@ -499,7 +615,7 @@ class _SchedulingTabState extends State<SchedulingTab>
                           ),
                           onPressed: () =>
                               _showDeleteConfirmationDialog(
-                                  context, event),
+                                  context, event, fromCalendarDialog: true),
                         ),
                       ],
                     ),
@@ -662,7 +778,7 @@ class _SchedulingTabState extends State<SchedulingTab>
   }
 
   void _showDeleteConfirmationDialog(
-      BuildContext context, Map<String, dynamic> event) {
+      BuildContext context, Map<String, dynamic> event, {bool fromCalendarDialog = false}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -675,30 +791,37 @@ class _SchedulingTabState extends State<SchedulingTab>
           ),
           TextButton(
             onPressed: () async {
-              // Close the confirmation dialog first
-              Navigator.of(context).pop();
-
-              // Then close the day events dialog if it's still open
-              Navigator.of(context).pop();
-
               final String? eventId = event['id'];
               if (eventId != null) {
                 try {
                   await MongoService.deleteEvent(eventId);
+                  // Close the confirmation dialog first
+                  Navigator.of(context).pop();
+
+                  // If called from calendar day events dialog, close that too
+                  if (fromCalendarDialog) {
+                    Navigator.of(context).pop();
+                  }
+
                   AnimatedFeedback.showSuccess(context);
                   await _loadEvents(); // Refresh events list
-
-                  // Show error animation (using the original context)
-                  if (mounted) {
-                    AnimatedFeedback.showError(context);
-                  }
                 } catch (e) {
+                  // Close the confirmation dialog first
+                  Navigator.of(context).pop();
+
+                  // If called from calendar day events dialog, close that too
+                  if (fromCalendarDialog) {
+                    Navigator.of(context).pop();
+                  }
+
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Failed to delete event: $e')),
                     );
                   }
                 }
+              } else {
+                Navigator.of(context).pop();
               }
             },
             child: const Text("Delete", style: TextStyle(color: Colors.red)),
@@ -708,148 +831,150 @@ class _SchedulingTabState extends State<SchedulingTab>
     );
   }
 
-  Widget _buildEventList(
-      BuildContext context, List<Map<String, dynamic>> events) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _selectedFilter == 'Today'
-                ? 'Today\'s Events'
-                : _selectedFilter == 'Past'
-                ? 'Past Events'
-                : 'Future Events',
-            style: TextStyle(
-              fontSize: MediaQuery.of(context).size.width < 350 ? 12 :
-              MediaQuery.of(context).size.width < 400 ? 13 : 14,
-              fontWeight: FontWeight.bold,
+  Widget _buildEnhancedListView(BuildContext context) {
+    List<Map<String, dynamic>> filteredEvents;
+
+    if (_selectedFilter == 'Today') {
+      filteredEvents = _allEvents.where((e) {
+        final eventDate = DateTime.tryParse(e['date'] ?? '');
+        if (eventDate == null) return false;
+        final today = DateTime.now();
+        final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
+        final todayDay = DateTime(today.year, today.month, today.day);
+        return eventDay.isAtSameMomentAs(todayDay);
+      }).toList();
+    } else if (_selectedFilter == 'Upcoming') {
+      filteredEvents = _allEvents.where((e) {
+        final eventDate = DateTime.tryParse(e['date'] ?? '');
+        if (eventDate == null) return false;
+        final today = DateTime.now();
+        final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
+        final todayDay = DateTime(today.year, today.month, today.day);
+        return eventDay.isAfter(todayDay);
+      }).toList();
+    } else {
+      filteredEvents = _allEvents.where((e) {
+        final eventDate = DateTime.tryParse(e['date'] ?? '');
+        if (eventDate == null) return false;
+        final today = DateTime.now();
+        final eventDay = DateTime(eventDate.year, eventDate.month, eventDate.day);
+        final todayDay = DateTime(today.year, today.month, today.day);
+        return eventDay.isBefore(todayDay);
+      }).toList();
+    }
+
+    // REMOVE THE DUPLICATE FILTER CONTAINER FROM HERE
+    return _buildSimpleEventList(filteredEvents);
+  }
+
+  Widget _buildSimpleEventList(List<Map<String, dynamic>> events) {
+    if (events.isEmpty) {
+      return Container(
+        height: 200,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.event_note,
+              size: MediaQuery.of(context).size.width < 350 ? 56 :
+              MediaQuery.of(context).size.width < 400 ? 60 : 64,
+              color: Colors.grey.shade400,
             ),
-          ),
+            const SizedBox(height: 16),
+            Text(
+              'No events',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: MediaQuery.of(context).size.width < 350 ? 16 :
+                MediaQuery.of(context).size.width < 400 ? 17 : 18,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(height: 8),
-        if (events.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
+      );
+    }
+
+    return Column(
+      children: events.map((event) => _buildSimpleEventCard(context, event)).toList(),
+    );
+  }
+
+
+  Widget _buildSimpleEventCard(BuildContext context, Map<String, dynamic> event) {
+    final date = DateFormat('MMM dd, yyyy').format(DateTime.parse(event['date'] as String));
+    final title = event['title'] as String? ?? 'Untitled Event';
+    final isFinished = event['finished'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        elevation: 2,
+        color: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  Icon(
-                    Icons.event_note,
-                    color: Colors.grey.shade400,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'No events yet!',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 14,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ...events.map((e) {
-          final date = DateFormat('dd/MM/yyyy')
-              .format(DateTime.parse(e['date'] as String));
-          final when = '${e['startTime']}-${e['endTime']}';
-          final title = e['title'] as String? ?? 'Untitled Event';
-          final temp = e['temp']?.toString() ?? 'N/A';
-          final isFinished = e['finished'] == true;
-          return Card(
-            color: isFinished
-                ? Colors.green.withOpacity(0.05)
-                : Colors.blue.withOpacity(0.05),
-            child: Padding(
-              padding: const EdgeInsets.all(12.0),
-              child: Row(
-                children: [
-                  Icon(
-                    isFinished ? Icons.check_circle : Icons.calendar_month,
-                    size: 20,
-                    color: isFinished ? Colors.green : Colors.blue,
-                  ),
-                  const SizedBox(width: 8),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: MediaQuery.of(context).size.width < 350 ? 12 :
-                            MediaQuery.of(context).size.width < 400 ? 13 : 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        Text(
-                          '$date $when • ${temp}°C',
-                          style: TextStyle(
-                            fontSize: MediaQuery.of(context).size.width < 350 ? 10 :
-                            MediaQuery.of(context).size.width < 400 ? 11 : 12,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
                   ),
                   if (isFinished)
                     Container(
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.2),
+                        color: const Color(0xFF2563EB).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Text(
                         'Completed',
                         style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.green,
+                          fontSize: 12,
+                          color: Color(0xFF2563EB),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                    onPressed: () => _showDeleteConfirmationDialog(context, event, fromCalendarDialog: false),
+                  ),
                 ],
               ),
-            ),
-          );
-        }).toList(),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
-          decoration: BoxDecoration(
-            color: Color(0xFF1A73E8),// Background color
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.calendar_today, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Text(
+                    date,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  ),
+                  const SizedBox(width: 16),
+                  Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      '${event['startTime']} - ${event['endTime']}',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-
         ),
-      ],
+      ),
     );
   }
 }
@@ -920,6 +1045,7 @@ class _MonthSelector extends StatelessWidget {
     );
   }
 }
+
 int getWeeksInMonth(DateTime date) {
   final firstDay = DateTime(date.year, date.month, 1);
   final lastDay = DateTime(date.year, date.month + 1, 0);
