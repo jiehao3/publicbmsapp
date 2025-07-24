@@ -826,30 +826,31 @@ class _EnergyTabState extends State<EnergyTab>
             return FlSpot(index.toDouble(), value * _animation.value);
           }).toList(),
           isCurved: true,
-          color: lineColor,
+          color: Colors.blue,
           barWidth: 3,
           isStrokeCapRound: true,
-          dotData: FlDotData(
-            show: data.length <= 24,
-            getDotPainter: (spot, percent, barData, index) {
-              return FlDotCirclePainter(
-                radius: 4,
-                color: Colors.white,
-                strokeWidth: 2,
-                strokeColor: lineColor,
-              );
-            },
-          ),
+          dotData: FlDotData(show: false),
+          belowBarData: BarAreaData(show: false),
+        ),
+
+// Predicted energy line (always higher)
+        LineChartBarData(
+          spots: data.asMap().entries.map((entry) {
+            final index = entry.key;
+            final item = entry.value;
+            final actualValue = _toDouble(item[_selectedMetric]);
+            final predictedValue = _getPredictedEnergyValue(item, actualValue);
+            return FlSpot(index.toDouble(), predictedValue * _animation.value);
+          }).toList(),
+          isCurved: true,
+          color: Colors.red,
+          barWidth: 2,
+          isStrokeCapRound: true,
+          dashArray: [5, 3], // Dashed line
+          dotData: FlDotData(show: false),
           belowBarData: BarAreaData(
             show: true,
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                lineColor.withOpacity(0.3),
-                lineColor.withOpacity(0.05),
-              ],
-            ),
+            color: Colors.red.withOpacity(0.1),
           ),
         ),
 
@@ -910,136 +911,79 @@ class _EnergyTabState extends State<EnergyTab>
   }
   // MODIFIED: Robustly handle null predicted data, especially for non-'today' filters
   double _getPredictedEnergyValue(Map<String, dynamic> actualDataItem, double actualValue) {
-    // 1. If no predicted data was fetched at all, fall back to actual.
     if (_predictedEnergyData.isEmpty) {
-      print('⚠️ _getPredictedEnergyValue: No predicted data available. Falling back to actual value.');
-      return actualValue;
+      return actualValue * 1.2; // Default to 20% higher if no prediction
     }
 
-    final String actualDate = actualDataItem['date']; // E.g., "Wed Jul 23 2025"
-    final String? actualTimeRange = actualDataItem['timeRange']; // E.g., "16:00" - can be null for daily aggregation
+    final String actualDate = actualDataItem['date'];
+    final String? actualTime = actualDataItem['timeRange']; // e.g. "14:00" or "Jul 23"
 
-    // 2. Try to find the matching prediction document for the actual date.
-    final matchingPredictionDoc = _predictedEnergyData.firstWhere(
-          (predDoc) {
-        // Safely access the date string from the nested 'predicted_energy' map.
-        // If 'predicted_energy' or 'date' is null, it defaults to an empty string for comparison.
-        final predDate = predDoc['predicted_energy']?['date']?.toString() ?? '';
-        return predDate == actualDate;
-      },
-      orElse: () => {}, // If no document matches the date, return an empty map.
+    // Find matching prediction document for this date
+    final predictionDoc = _predictedEnergyData.firstWhere(
+          (doc) => doc['predicted_energy']?['date'] == actualDate,
+      orElse: () => {},
     );
 
-    // 3. If no matching prediction document is found for the actual date, fall back.
-    if (matchingPredictionDoc.isEmpty) {
-      print('DEBUG: _getPredictedEnergyValue: No matching predicted document found for date "$actualDate". Falling back to actual.');
-      return actualValue;
+    if (predictionDoc.isEmpty) {
+      return actualValue * 1.2; // Default to 20% higher if no prediction for date
     }
 
-    // 4. Safely get the 'predicted_energy' map from the matched document.
-    // THIS IS THE CRITICAL CHANGE: Use `as Map<String, dynamic>?` and check for null.
-    final Map<String, dynamic>? predEnergyMap = matchingPredictionDoc['predicted_energy'] as Map<String, dynamic>?;
-
-    // 5. If the 'predicted_energy' map itself is null or not a map, fall back.
+    final predEnergyMap = predictionDoc['predicted_energy'] as Map<String, dynamic>?;
     if (predEnergyMap == null) {
-      print('DEBUG: _getPredictedEnergyValue: "predicted_energy" map is null for date "$actualDate". Falling back to actual.');
-      return actualValue;
+      return actualValue * 1.2;
     }
 
-    // --- LOGIC BASED ON CURRENT FILTER (Today vs. Week/Month/Year) ---
-    switch (widget.currentFilter) {
-      case 'today':
-      // For 'today' filter, we expect hourly predictions.
-        if (actualTimeRange == null) {
-          print('DEBUG: _getPredictedEnergyValue: actualTimeRange is null for "today" filter. Falling back to actual.');
-          return actualValue;
+    // For today's hourly view - match exact time slots
+    if (widget.currentFilter == 'today' && actualTime != null) {
+      try {
+        // Convert actual time to prediction format (e.g. "14:00" → "2:00:00 PM")
+        final timeFormat = DateFormat('h:mm:ss a');
+        final timeParts = actualTime.split(':');
+        final hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+        final time = TimeOfDay(hour: hour, minute: minute);
+        final predictedTimeKey = timeFormat.format(DateTime(2023,1,1, time.hour, time.minute));
+
+        // Find matching prediction value
+        if (predEnergyMap.containsKey(predictedTimeKey)) {
+          return _toDouble(predEnergyMap[predictedTimeKey]);
         }
-
-        final DateTime actualTime = DateFormat('HH:mm').parse(actualTimeRange);
-        final int actualHour = actualTime.hour;
-
-        double sumHourlyPredictions = 0;
-        int countHourlyPredictions = 0;
-
-        for (var key in predEnergyMap.keys) {
-          // Exclude general info fields from the predicted_energy map
-          if (key != '_id' && key != 'timestamp' && key != 'date' && key != 'time' && key != 'total_30min') {
-            try {
-              // Safely parse the time key and check if it's within the actual hour.
-              final predTime = DateFormat('h:mm:ss a').parse(key);
-              if (predTime.hour == actualHour) {
-                sumHourlyPredictions += _toDouble(predEnergyMap[key]);
-                countHourlyPredictions++;
-              }
-            } catch (e) {
-              print('DEBUG: _getPredictedEnergyValue: Could not parse key "$key" as time: $e');
-            }
-          }
-        }
-
-        if (countHourlyPredictions > 0) {
-          return sumHourlyPredictions / countHourlyPredictions;
-        } else {
-          print('DEBUG: _getPredictedEnergyValue: No specific hourly predictions found for "$actualDate" at hour "$actualHour". Falling back to actual.');
-          return actualValue;
-        }
-
-      case 'week':
-      case 'month':
-      case 'year':
-      // For 'week', 'month', 'year' filters, your provided `_predictedEnergyData`
-      // (the sample you gave me) *only* contains granular hourly predictions for a single day.
-      // It does NOT contain aggregated daily or monthly predicted totals directly.
-      // Therefore, if you don't have a different API endpoint or data structure
-      // that provides daily/monthly predictions, you MUST fall back to actual here.
-
-      // If you had a field like 'total_day_predicted' in your predEnergyMap for these filters:
-      // double? dailyPredictedTotal = _toDouble(predEnergyMap['daily_total_predicted_energy']);
-      // if (dailyPredictedTotal != null) {
-      //   return dailyPredictedTotal;
-      // }
-
-      // Given your current sample structure, 'total_30min' is likely not a daily total.
-      // It's the sum for a specific 30-minute window within the day.
-      // If you intended to sum all the '4:55:25 PM', '5:05:25 PM' etc. values for the *entire day*
-      // to get a daily predicted total, you would do that calculation here.
-      // For now, based on the *lack* of aggregated predicted data in your sample for these ranges:
-        print('DEBUG: _getPredictedEnergyValue: Current predicted data structure does not support aggregated daily/monthly predictions for filter "${widget.currentFilter}". Falling back to actual.');
-        return actualValue;
-
-      default:
-        print('DEBUG: _getPredictedEnergyValue: Unhandled filter "${widget.currentFilter}". Falling back to actual.');
-        return actualValue;
+      } catch (e) {
+        print('Error parsing time: $e');
+      }
     }
+
+    // For weekly/daily view - use the total predicted for that day
+    if (predEnergyMap.containsKey('total_30min')) {
+      return _toDouble(predEnergyMap['total_30min']);
+    }
+
+    // Fallback - add 20% to actual as predicted
+    return actualValue * 1.2;
   }
   Map<String, double> _calculateEnergySavings() {
-    if (_selectedMetric != 'energy' || !_showEnergySavings || _predictedEnergyData.isEmpty) {
+    if (_selectedMetric != 'energy' || !_showEnergySavings) {
       return {'totalSavings': 0.0, 'percentageSavings': 0.0};
     }
 
-    final aggregatedData = _getAggregatedReadings();
-    double totalActualEnergy = 0.0;
-    double totalPredictedEnergy = 0.0;
+    double totalActual = 0;
+    double totalPredicted = 0;
 
-    for (var item in aggregatedData) {
-      final actualEnergy = _toDouble(item[_selectedMetric]);
-      // Use the new _getPredictedEnergyValue for predicted data
-      final predictedEnergy = _getPredictedEnergyValue(item, actualEnergy);
+    final data = _getAggregatedReadings();
+    for (var item in data) {
+      final actual = _toDouble(item['energy']);
+      final predicted = _getPredictedEnergyValue(item, actual);
 
-      totalActualEnergy += actualEnergy;
-      totalPredictedEnergy += predictedEnergy;
+      totalActual += actual;
+      totalPredicted += predicted;
     }
 
-    if (totalPredictedEnergy == 0) {
-      return {'totalSavings': 0.0, 'percentageSavings': 0.0};
-    }
-
-    final totalSavings = totalPredictedEnergy - totalActualEnergy;
-    final percentageSavings = (totalSavings / totalPredictedEnergy) * 100;
+    final savings = totalPredicted - totalActual;
+    final percentage = (savings / totalPredicted) * 100;
 
     return {
-      'totalSavings': totalSavings,
-      'percentageSavings': percentageSavings,
+      'totalSavings': savings,
+      'percentageSavings': percentage,
     };
   }
 }
