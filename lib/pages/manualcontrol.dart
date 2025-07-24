@@ -547,7 +547,7 @@ class _ManualControlTabState extends State<ManualControlTab>
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2, // Always 2 columns
-        childAspectRatio: 1.03, // Increased aspect ratio to prevent overflow
+        childAspectRatio: 0.97, // Increased aspect ratio to prevent overflow
         mainAxisSpacing: 16,
         crossAxisSpacing: 16,
       ),

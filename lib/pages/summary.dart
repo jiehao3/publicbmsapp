@@ -566,6 +566,7 @@ class _SummaryPageState extends State<SummaryPage> {
         return _isLoading || _isFilterLoading
             ? const Center(child: CircularProgressIndicator(color: Colors.blue))
             : EnergyTab(
+          building: buildingName,
           sensorData: _sensorData,
           currentFilter: _timeRange,
           selectedMetric: _selectedMetric,

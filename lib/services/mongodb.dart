@@ -481,6 +481,93 @@ class MongoService {
       rethrow;
     }
   }
+  static Future<List<Map<String, dynamic>>> fetchPredictedEnergyW512({
+    String timeRange = 'today',
+  }) async {
+    try {
+      // Construct the URL with the timeRange query parameter
+      final Uri url = Uri.parse('$_baseUrl/predicted-energy/w512?timeRange=$timeRange');
+
+      print('🔗 Fetching W512 predicted energy data for timeRange: $timeRange from URL: $url');
+
+      final response = await http.get(
+        url,
+        headers: _headers,
+      );
+
+      print('🔑 W512 Predicted Energy Response Status Code: ${response.statusCode}');
+      // Optional: print headers if needed for debugging
+      // print('📜 Response Headers: ${response.headers}');
+
+      if (response.statusCode == 200) {
+        // Parse the JSON response body
+        final List<dynamic> data = jsonDecode(response.body);
+
+        print('📄 Fetched ${data.length} W512 predicted energy records for timeRange: $timeRange');
+
+        // Cast the list of dynamic maps to List<Map<String, dynamic>>
+        // Ensure the data structure matches what your Dart code expects
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        // Handle non-200 status codes
+        print('❗ W512 Predicted Energy Error Response Body: ${response.body}');
+        throw Exception('Failed to fetch W512 predicted energy data: ${response.statusCode}');
+      }
+    } catch (e) {
+      // Handle network errors, JSON parsing errors, etc.
+      print('❌ fetchPredictedEnergyW512 error: $e');
+      // Returning an empty list might be appropriate, or rethrow depending on your app's error handling strategy
+      return [];
+      // If you want the caller to handle the exception, use: rethrow;
+    }
+  }
+
+  /// Fetches predicted energy data for SPGG.
+  ///
+  /// Optionally specify a [timeRange] (e.g., 'today', 'week', 'month', 'year', 'all').
+  /// Defaults to 'today'.
+  static Future<List<Map<String, dynamic>>> fetchPredictedEnergySPGG({
+    String timeRange = 'today',
+  }) async {
+    try {
+      // Construct the URL with the timeRange query parameter
+      final Uri url = Uri.parse('$_baseUrl/predicted-energy/spgg?timeRange=$timeRange');
+
+      print('🔗 Fetching SPGG predicted energy data for timeRange: $timeRange from URL: $url');
+
+      final response = await http.get(
+        url,
+        headers: _headers,
+      );
+
+      print('🔑 SPGG Predicted Energy Response Status Code: ${response.statusCode}');
+      // Optional: print headers if needed for debugging
+      // print('📜 Response Headers: ${response.headers}');
+
+      if (response.statusCode == 200) {
+        // Parse the JSON response body
+        final List<dynamic> data = jsonDecode(response.body);
+
+        print('📄 Fetched ${data.length} SPGG predicted energy records for timeRange: $timeRange');
+
+        // Cast the list of dynamic maps to List<Map<String, dynamic>>
+        // Ensure the data structure matches what your Dart code expects
+        return data.cast<Map<String, dynamic>>();
+      } else {
+        // Handle non-200 status codes
+        print('❗ SPGG Predicted Energy Error Response Body: ${response.body}');
+        throw Exception('Failed to fetch SPGG predicted energy data: ${response.statusCode}');
+      }
+    } catch (e) {
+      // Handle network errors, JSON parsing errors, etc.
+      print('❌ fetchPredictedEnergySPGG error: $e');
+      // Returning an empty list might be appropriate, or rethrow depending on your app's error handling strategy
+      return [];
+      // If you want the caller to handle the exception, use: rethrow;
+    }
+  }
+
+// ... (other methods in the MongoService class)
 
   // Close method - no longer needed for API client
   static Future<void> close() async {
