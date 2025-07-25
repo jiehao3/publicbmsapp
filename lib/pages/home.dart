@@ -491,7 +491,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             },
           ),
           children: [
-            TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              // Add this line to include a custom user-agent
+              userAgentPackageName: 'com.example.bmsapp', // Replace with your actual package name
+            ),
             MarkerLayer(
               markers: [
                 if (_currentPosition != null)

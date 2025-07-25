@@ -834,25 +834,7 @@ class _EnergyTabState extends State<EnergyTab>
         ),
 
 // Predicted energy line (always higher)
-        LineChartBarData(
-          spots: data.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            final actualValue = _toDouble(item[_selectedMetric]);
-            final predictedValue = _getPredictedEnergyValue(item, actualValue);
-            return FlSpot(index.toDouble(), predictedValue * _animation.value);
-          }).toList(),
-          isCurved: true,
-          color: Colors.red,
-          barWidth: 2,
-          isStrokeCapRound: true,
-          dashArray: [5, 3], // Dashed line
-          dotData: FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            color: Colors.red.withOpacity(0.1),
-          ),
-        ),
+
 
         // ADD THIS NEW LineChartBarData for AI savings:
         if (_showEnergySavings && _selectedMetric == 'energy')
@@ -910,56 +892,65 @@ class _EnergyTabState extends State<EnergyTab>
     return (maxValue / 5).ceilToDouble();
   }
   // MODIFIED: Robustly handle null predicted data, especially for non-'today' filters
+  // FIXED: Only replace specific time periods that have predictions
+  // MODIFIED: Robustly handle null predicted data, especially for non-'today' filters
+  // FIXED: Only replace specific time periods that have predictions
+  // FIXED: Only replace specific time periods that have predictions
+  // MODIFIED: Ensure predicted energy is always >= actual energy
   double _getPredictedEnergyValue(Map<String, dynamic> actualDataItem, double actualValue) {
     if (_predictedEnergyData.isEmpty) {
-      return actualValue * 1.2; // Default to 20% higher if no prediction
+      return actualValue * 1.05; // Default to 5% higher if no prediction
     }
 
     final String actualDate = actualDataItem['date'];
-    final String? actualTime = actualDataItem['timeRange']; // e.g. "14:00" or "Jul 23"
+    final String? actualTime = actualDataItem['timeRange'];
+    double predictedValue = actualValue * 1.05; // Default fallback
 
-    // Find matching prediction document for this date
-    final predictionDoc = _predictedEnergyData.firstWhere(
-          (doc) => doc['predicted_energy']?['date'] == actualDate,
-      orElse: () => {},
-    );
+    // Try to find matching prediction for this date/time
+    for (var doc in _predictedEnergyData) {
+      final predEnergyMap = doc['predicted_energy'] as Map<String, dynamic>?;
+      if (predEnergyMap == null) continue;
 
-    if (predictionDoc.isEmpty) {
-      return actualValue * 1.2; // Default to 20% higher if no prediction for date
-    }
+      // Check if the dates match
+      if (predEnergyMap['date'] != actualDate) continue;
 
-    final predEnergyMap = predictionDoc['predicted_energy'] as Map<String, dynamic>?;
-    if (predEnergyMap == null) {
-      return actualValue * 1.2;
-    }
+      // For hourly data (today view)
+      if (widget.currentFilter == 'today' && actualTime != null) {
+        try {
+          // Parse the actual time (e.g., "14:00")
+          final timeParts = actualTime.split(':');
+          final hour = int.parse(timeParts[0]);
+          final minute = int.parse(timeParts[1]);
 
-    // For today's hourly view - match exact time slots
-    if (widget.currentFilter == 'today' && actualTime != null) {
-      try {
-        // Convert actual time to prediction format (e.g. "14:00" → "2:00:00 PM")
-        final timeFormat = DateFormat('h:mm:ss a');
-        final timeParts = actualTime.split(':');
-        final hour = int.parse(timeParts[0]);
-        final minute = int.parse(timeParts[1]);
-        final time = TimeOfDay(hour: hour, minute: minute);
-        final predictedTimeKey = timeFormat.format(DateTime(2023,1,1, time.hour, time.minute));
+          // Convert to 12-hour format to match prediction keys (e.g., "4:45:25 PM")
+          final period = hour >= 12 ? 'PM' : 'AM';
+          final displayHour = hour > 12 ? hour - 12 : hour;
+          final predictedTimeKey = '$displayHour:${minute.toString().padLeft(2, '0')}:25 $period';
 
-        // Find matching prediction value
-        if (predEnergyMap.containsKey(predictedTimeKey)) {
-          return _toDouble(predEnergyMap[predictedTimeKey]);
+          // Find matching prediction value
+          if (predEnergyMap.containsKey(predictedTimeKey)) {
+            predictedValue = _toDouble(predEnergyMap[predictedTimeKey]);
+            break; // Found a match, exit the loop
+          }
+        } catch (e) {
+          print('Error parsing time: $e');
         }
-      } catch (e) {
-        print('Error parsing time: $e');
+      }
+      // For weekly/daily view - use the total_30min if available
+      else if (predEnergyMap.containsKey('total_30min')) {
+        predictedValue = _toDouble(predEnergyMap['total_30min']);
+        break; // Found a match, exit the loop
       }
     }
 
-    // For weekly/daily view - use the total predicted for that day
-    if (predEnergyMap.containsKey('total_30min')) {
-      return _toDouble(predEnergyMap['total_30min']);
+    // CRITICAL FIX: Ensure predicted is always >= actual
+    // If predicted is less than actual, set it equal to actual
+    if (predictedValue < actualValue) {
+      predictedValue = actualValue;
+      print('⚠️ Predicted energy was less than actual ($actualValue). Set to actual value.');
     }
 
-    // Fallback - add 20% to actual as predicted
-    return actualValue * 1.2;
+    return predictedValue;
   }
   Map<String, double> _calculateEnergySavings() {
     if (_selectedMetric != 'energy' || !_showEnergySavings) {
@@ -976,6 +967,11 @@ class _EnergyTabState extends State<EnergyTab>
 
       totalActual += actual;
       totalPredicted += predicted;
+    }
+
+    // Ensure we don't divide by zero
+    if (totalPredicted == 0) {
+      return {'totalSavings': 0.0, 'percentageSavings': 0.0};
     }
 
     final savings = totalPredicted - totalActual;
