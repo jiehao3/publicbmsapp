@@ -36,31 +36,16 @@ class _EnergyTabState extends State<EnergyTab>
     'occupancy'
   ];
   bool _showEnergySavings = false;
-  // ADD THESE NEW STATE VARIABLES
-  List<Map<String, dynamic>> _predictedEnergyData = [];
+
+  // NEW STATE VARIABLES for aggregated predicted energy
+  // Stores 30-minute aggregated predictions for 'today' view (Key: "YYYY-MM-DD HH:MM")
+  Map<String, double> _aggregatedPredicted30MinEnergy = {};
+  // Stores daily aggregated predictions for 'week'/'month' views (Key: "EEE MMM dd yyyy")
+  Map<String, double> _aggregatedPredictedDailyEnergy = {};
+  // Stores monthly aggregated predictions for 'year' view (Key: "MMM yyyy")
+  Map<String, double> _aggregatedPredictedMonthlyEnergy = {};
+
   bool _isLoadingPredictions = false;
-  final Map<String, Map<String, double>> _dummyPredictionData = {
-    // Use today's date as key
-    DateFormat('EEE MMM dd yyyy').format(DateTime.now()): {
-      // 8:00 AM - 8:30 AM cycle (every 10 minutes)
-      '08:00': 1.2,
-      '08:10': 1.6,
-      '08:20': 1.1,
-      '08:30': 1.8,
-
-      // 2:00 PM - 2:30 PM cycle
-      '14:00': 2.4,
-      '14:10': 2.8,
-      '14:20': 2.1,
-      '14:30': 2.7,
-
-      // 8:00 PM - 8:30 PM cycle
-      '20:00': 1.8,
-      '20:10': 1.1,
-      '20:20': 2.5,
-      '20:30': 2.2,
-    },
-  };
 
   // Consistent color scheme
   static const Color _primaryColor = Color(0xFF2563EB);
@@ -84,11 +69,17 @@ class _EnergyTabState extends State<EnergyTab>
       _fetchPredictedEnergyData();
     }
   }
+
+  // MODIFIED: _fetchPredictedEnergyData to aggregate predictions based on filter
   Future<void> _fetchPredictedEnergyData() async {
     if (_isLoadingPredictions) return; // Prevent multiple fetches
 
     setState(() {
       _isLoadingPredictions = true;
+      // Clear all previous aggregations before fetching new data
+      _aggregatedPredicted30MinEnergy = {};
+      _aggregatedPredictedDailyEnergy = {};
+      _aggregatedPredictedMonthlyEnergy = {};
     });
 
     try {
@@ -106,17 +97,104 @@ class _EnergyTabState extends State<EnergyTab>
         fetchedData = [];
       }
 
+      // Process fetchedData to aggregate based on the current filter
+      if (widget.currentFilter == 'today') {
+        // For 'today' filter, aggregate predictions by 30-minute intervals
+        for (var doc in fetchedData) {
+          final predEnergyMap = doc['predicted_energy'] as Map<String, dynamic>?;
+          if (predEnergyMap != null && predEnergyMap['date'] != null) {
+            try {
+              final String datePart = predEnergyMap['date'] as String; // e.g., "Wed Jul 25 2025"
+
+              // Iterate through specific 30-minute prediction keys
+              predEnergyMap.forEach((key, value) {
+                if (key.contains(':') && key.contains('M') && key != 'time' && key != 'id' && key != 'timestamp' && key != 'total_30min') {
+                  try {
+                    final String timePart = key; // e.g., "7:55:25 PM"
+                    final double energyValue = _toDouble(value);
+
+                    // Combine date and time, then parse to get local DateTime
+                    final predictedDateTime = DateFormat('EEE MMM dd yyyy h:mm:ss a').parse('$datePart $timePart');
+
+                    // Normalize to the start of the 30-minute interval
+                    final normalizedMinute = (predictedDateTime.minute ~/ 30) * 30;
+                    final intervalStart = DateTime(
+                      predictedDateTime.year,
+                      predictedDateTime.month,
+                      predictedDateTime.day,
+                      predictedDateTime.hour,
+                      normalizedMinute,
+                    );
+
+                    final thirtyMinKey = DateFormat('yyyy-MM-dd HH:mm').format(intervalStart);
+
+                    _aggregatedPredicted30MinEnergy.update(
+                      thirtyMinKey,
+                          (existingSum) => existingSum + energyValue,
+                      ifAbsent: () => energyValue,
+                    );
+                  } catch (e) {
+                    print('Error processing individual 30-min prediction for today: $key - $e');
+                  }
+                }
+              });
+            } catch (e) {
+              print('Error processing predicted data for today aggregation: $e');
+            }
+          }
+        }
+        print('DEBUG: Aggregated 30-Min Predictions (Today): $_aggregatedPredicted30MinEnergy');
+      } else if (widget.currentFilter == 'week' || widget.currentFilter == 'month') {
+        // For 'week' or 'month' filters, aggregate predictions by day (Key: "EEE MMM dd yyyy")
+        for (var doc in fetchedData) {
+          final predEnergyMap = doc['predicted_energy'] as Map<String, dynamic>?;
+          if (predEnergyMap != null && predEnergyMap['date'] != null) {
+            final date = predEnergyMap['date'] as String; // e.g., "Wed Jul 25 2025"
+            final total30min = _toDouble(predEnergyMap['total_30min']);
+
+            _aggregatedPredictedDailyEnergy.update(
+              date,
+                  (existingSum) => existingSum + total30min,
+              ifAbsent: () => total30min,
+            );
+          }
+        }
+        print('DEBUG: Aggregated Daily Predictions: $_aggregatedPredictedDailyEnergy');
+      } else if (widget.currentFilter == 'year') {
+        // For 'year' filter, aggregate predictions by month (Key: "MMM yyyy")
+        for (var doc in fetchedData) {
+          final predEnergyMap = doc['predicted_energy'] as Map<String, dynamic>?;
+          if (predEnergyMap != null && doc['timestamp'] != null) {
+            try {
+              final predictedTimestamp = DateTime.parse(doc['timestamp']);
+              final total30min = _toDouble(predEnergyMap['total_30min']);
+              final monthlyKey = DateFormat('MMM yyyy').format(predictedTimestamp); // e.g., "Jul 2025"
+
+              _aggregatedPredictedMonthlyEnergy.update(
+                monthlyKey,
+                    (existingSum) => existingSum + total30min,
+                ifAbsent: () => total30min,
+              );
+            } catch (e) {
+              print('Error processing predicted data for monthly aggregation: $e');
+            }
+          }
+        }
+        print('DEBUG: Aggregated Monthly Predictions: $_aggregatedPredictedMonthlyEnergy');
+      }
+
       setState(() {
-        _predictedEnergyData = fetchedData;
         _isLoadingPredictions = false;
       });
-      print('✅ Fetched predicted energy data: ${_predictedEnergyData.length} records');
+      print('✅ Fetched and processed predicted energy data: ${fetchedData.length} records');
     } catch (e) {
       print('❌ Error fetching predicted energy data: $e');
       setState(() {
         _isLoadingPredictions = false;
         // Optionally clear data or show an error state
-        _predictedEnergyData = []; // Fallback to no predictions on error
+        _aggregatedPredicted30MinEnergy = {};
+        _aggregatedPredictedDailyEnergy = {};
+        _aggregatedPredictedMonthlyEnergy = {};
       });
     }
   }
@@ -127,24 +205,29 @@ class _EnergyTabState extends State<EnergyTab>
     _animationController.dispose();
     super.dispose();
   }
+
   @override
   void didUpdateWidget(covariant EnergyTab oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Re-fetch predictions if metric changes to energy or if filter changes
     if (widget.selectedMetric != oldWidget.selectedMetric) {
       setState(() {
         _selectedMetric = widget.selectedMetric;
         if (_selectedMetric == 'energy') {
           _fetchPredictedEnergyData(); // Fetch when switching to energy
         } else {
-          _predictedEnergyData = []; // Clear if not on energy tab
+          // Clear predicted data if not on energy tab
+          _aggregatedPredicted30MinEnergy = {};
+          _aggregatedPredictedDailyEnergy = {};
+          _aggregatedPredictedMonthlyEnergy = {};
         }
       });
-    }
-    if (widget.currentFilter != oldWidget.currentFilter && _selectedMetric == 'energy') {
+    } else if (widget.currentFilter != oldWidget.currentFilter && _selectedMetric == 'energy') {
       _fetchPredictedEnergyData(); // Re-fetch if time filter changes for energy tab
     }
-    print('✅ Fetched predicted energy data: ${_predictedEnergyData.length} records');
-    print('DEBUG: Fetched predicted data for week: $_predictedEnergyData'); // ADD THIS LINE
+    print('DEBUG: Predicted data count (30-min): ${_aggregatedPredicted30MinEnergy.length}');
+    print('DEBUG: Predicted data count (daily): ${_aggregatedPredictedDailyEnergy.length}');
+    print('DEBUG: Predicted data count (monthly): ${_aggregatedPredictedMonthlyEnergy.length}');
   }
 
   double _toDouble(dynamic value) {
@@ -173,18 +256,19 @@ class _EnergyTabState extends State<EnergyTab>
     if (widget.sensorData.isEmpty) return [];
     switch (widget.currentFilter) {
       case 'today':
-        return _getHourlyReadings();
+        return _get30MinuteReadings(); // Changed to 30-minute granularity
       case 'week':
       case 'month':
         return _getDailyReadings();
       case 'year':
         return _getMonthlyReadings();
       default:
-        return _getHourlyReadings();
+        return _get30MinuteReadings(); // Default to 30-minute
     }
   }
 
-  List<Map<String, dynamic>> _getHourlyReadings() {
+  // NEW: _get30MinuteReadings for 'today' filter
+  List<Map<String, dynamic>> _get30MinuteReadings() {
     if (widget.sensorData.isEmpty) return [];
     final currentEntries = widget.sensorData.where((entry) {
       final now = DateTime.now();
@@ -192,57 +276,73 @@ class _EnergyTabState extends State<EnergyTab>
       return entry['date'] == today;
     }).toList();
     if (currentEntries.isEmpty) return [];
-    final targetDate =
-    DateFormat('EEE MMM dd yyyy').parse(currentEntries.first['date']);
-    final hours = List.generate(24, (hour) {
-      final hourStart =
-      DateTime(targetDate.year, targetDate.month, targetDate.day, hour);
-      return {
-        'start': hourStart,
-        'end': hourStart.add(const Duration(hours: 1)),
-        'entries': <Map<String, dynamic>>[],
-      };
-    });
+
+    final targetDate = DateFormat('EEE MMM dd yyyy').parse(currentEntries.first['date']);
+    final thirtyMinuteSlots = <String, List<Map<String, dynamic>>>{};
+
+    // Initialize 48 30-minute slots for the day
+    for (int hour = 0; hour < 24; hour++) {
+      for (int minute = 0; minute < 60; minute += 30) {
+        final slotStart = DateTime(targetDate.year, targetDate.month, targetDate.day, hour, minute);
+        final key = DateFormat('yyyy-MM-dd HH:mm').format(slotStart);
+        thirtyMinuteSlots[key] = [];
+      }
+    }
+
+    // Distribute sensor data into 30-minute slots
     for (var entry in currentEntries) {
-      final entryTime = DateFormat('EEE MMM dd yyyy h:mm:ss a')
-          .parse('${entry['date']} ${entry['time']}');
-      for (var hourSlot in hours) {
-        final DateTime start = hourSlot['start'] as DateTime;
-        final DateTime end = hourSlot['end'] as DateTime;
-        if (entryTime.isAfter(start.subtract(const Duration(milliseconds: 1))) &&
-            entryTime.isBefore(end)) {
-          (hourSlot['entries'] as List<Map<String, dynamic>>).add(entry);
-          break;
+      try {
+        final entryTime = DateFormat('EEE MMM dd yyyy h:mm:ss a').parse('${entry['date']} ${entry['time']}');
+        final normalizedMinute = (entryTime.minute ~/ 30) * 30;
+        final slotStart = DateTime(
+          entryTime.year,
+          entryTime.month,
+          entryTime.day,
+          entryTime.hour,
+          normalizedMinute,
+        );
+        final key = DateFormat('yyyy-MM-dd HH:mm').format(slotStart);
+        thirtyMinuteSlots[key]?.add(entry);
+      } catch (e) {
+        print('Error parsing sensor data entry time: $e');
+      }
+    }
+
+    // Convert to a list of maps, ensuring all 48 slots are present
+    final List<Map<String, dynamic>> result = [];
+    final now = DateTime.now();
+    for (int hour = 0; hour < 24; hour++) {
+      for (int minute = 0; minute < 60; minute += 30) {
+        final slotStart = DateTime(targetDate.year, targetDate.month, targetDate.day, hour, minute);
+        // Only include slots up to the current 30-minute interval
+        if (slotStart.isBefore(now.add(const Duration(minutes: 30)))) {
+          final key = DateFormat('yyyy-MM-dd HH:mm').format(slotStart);
+          final entries = thirtyMinuteSlots[key] ?? [];
+          final hasData = entries.isNotEmpty;
+
+          result.add({
+            'date': DateFormat('EEE MMM dd yyyy').format(slotStart),
+            'timeRange': DateFormat('HH:mm').format(slotStart), // e.g., "08:00"
+            'displayLabel': DateFormat('HH:mm').format(slotStart), // e.g., "08:00"
+            'energy': hasData
+                ? entries.fold(0.0, (sum, e) => sum + _toDouble(e['energy']))
+                : 0.0,
+            'temperature': hasData
+                ? entries.map((e) => _toDouble(e['temperature'])).average
+                : 0.0,
+            'humidity': hasData
+                ? entries.map((e) => _toDouble(e['humidity'])).average
+                : 0.0,
+            'occupancy': hasData
+                ? entries.fold(0, (sum, e) => sum + _toInt(e['occupancy']))
+                : 0,
+          });
         }
       }
     }
-    return hours
-        .where((hourSlot) => (hourSlot['start'] as DateTime).isBefore(DateTime.now()))
-        .map((hourSlot) {
-      final entries = hourSlot['entries'] as List<Map<String, dynamic>>;
-      final hasData = entries.isNotEmpty;
-      return {
-        'date': DateFormat('EEE MMM dd yyyy')
-            .format(hourSlot['start'] as DateTime),
-        'timeRange':
-        '${DateFormat('HH:mm').format(hourSlot['start'] as DateTime)}',
-        'displayLabel':
-        DateFormat('HH:mm').format(hourSlot['start'] as DateTime),
-        'energy': hasData
-            ? entries.fold(0.0, (sum, e) => sum + _toDouble(e['energy']))
-            : 0.0,
-        'temperature': hasData
-            ? entries.map((e) => _toDouble(e['temperature'])).average
-            : 0.0,
-        'humidity': hasData
-            ? entries.map((e) => _toDouble(e['humidity'])).average
-            : 0.0,
-        'occupancy': hasData
-            ? entries.fold(0, (sum, e) => sum + _toInt(e['occupancy']))
-            : 0,
-      };
-    }).toList();
+    return result;
   }
+
 
   List<Map<String, dynamic>> _getDailyReadings() {
     if (widget.sensorData.isEmpty) return [];
@@ -281,7 +381,7 @@ class _EnergyTabState extends State<EnergyTab>
       final formattedDate = DateFormat('EEE MMM dd yyyy').format(date);
       final entries = dailyData[formattedDate] ?? [];
       return {
-        'date': formattedDate,
+        'date': formattedDate, // e.g., "Wed Jul 25 2025"
         'formattedDate': DateFormat('MMM d').format(date),
         'displayLabel': DateFormat('MMM d').format(date),
         'parsedDate': date,
@@ -318,8 +418,8 @@ class _EnergyTabState extends State<EnergyTab>
     }
     months = months.reversed.toList();
     return months.map((monthStart) {
-      final monthKey = DateFormat('yyyy-MM').format(monthStart);
-      final entries = dataByMonth[monthKey] ?? [];
+      final monthKey = DateFormat('MMM yyyy').format(monthStart); // e.g., "Jul 2025"
+      final entries = dataByMonth[DateFormat('yyyy-MM').format(monthStart)] ?? [];
       return {
         'month': monthStart,
         'formattedDate': DateFormat('MMM yyyy').format(monthStart),
@@ -817,7 +917,7 @@ class _EnergyTabState extends State<EnergyTab>
         },
       ),
       lineBarsData: [
-        // Existing LineChartBarData stays exactly the same...
+        // Existing LineChartBarData for actual energy
         LineChartBarData(
           spots: data.asMap().entries.map((entry) {
             final index = entry.key;
@@ -833,9 +933,6 @@ class _EnergyTabState extends State<EnergyTab>
           belowBarData: BarAreaData(show: false),
         ),
 
-// Predicted energy line (always higher)
-
-
         // ADD THIS NEW LineChartBarData for AI savings:
         if (_showEnergySavings && _selectedMetric == 'energy')
           LineChartBarData(
@@ -843,10 +940,9 @@ class _EnergyTabState extends State<EnergyTab>
               final index = entry.key;
               final item = entry.value;
               final actualValue = _toDouble(item[_selectedMetric]);
-              // MODIFIED LINE: Use the new _getPredictedEnergyValue for predicted data
-              final predictedSavings = _getPredictedEnergyValue(item, actualValue);
-              return FlSpot(index.toDouble(), predictedSavings * _animation.value);
-              return FlSpot(index.toDouble(), predictedSavings * _animation.value);
+              // Use the new _getPredictedEnergyValue for predicted data
+              final predicted = _getPredictedEnergyValue(item, actualValue);
+              return FlSpot(index.toDouble(), predicted * _animation.value);
             }).toList(),
             isCurved: true,
             color: Colors.orange,
@@ -860,8 +956,8 @@ class _EnergyTabState extends State<EnergyTab>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.orange.withOpacity(0.2), // Change from green
-                  Colors.orange.withOpacity(0.05), // Change from green
+                  Colors.orange.withOpacity(0.2),
+                  Colors.orange.withOpacity(0.05),
                 ],
               ),
             ),
@@ -891,60 +987,53 @@ class _EnergyTabState extends State<EnergyTab>
     if (maxValue <= 50) return 10;
     return (maxValue / 5).ceilToDouble();
   }
-  // MODIFIED: Robustly handle null predicted data, especially for non-'today' filters
-  // FIXED: Only replace specific time periods that have predictions
-  // MODIFIED: Robustly handle null predicted data, especially for non-'today' filters
-  // FIXED: Only replace specific time periods that have predictions
-  // FIXED: Only replace specific time periods that have predictions
-  // MODIFIED: Ensure predicted energy is always >= actual energy
+
+  // MODIFIED: _getPredictedEnergyValue to use aggregated data based on filter
   double _getPredictedEnergyValue(Map<String, dynamic> actualDataItem, double actualValue) {
-    if (_predictedEnergyData.isEmpty) {
-      return actualValue * 1.05; // Default to 5% higher if no prediction
-    }
+    // Default to a value guaranteed to be higher or equal if no specific prediction is found
+    // This handles cases where actualValue is 0 or very small, ensuring predicted is visibly higher.
+    double predictedValue = actualValue + (actualValue * 0.05).clamp(0.01, double.infinity);
 
-    final String actualDate = actualDataItem['date'];
-    final String? actualTime = actualDataItem['timeRange'];
-    double predictedValue = actualValue * 1.05; // Default fallback
+    switch (widget.currentFilter) {
+      case 'today':
+        final String actualDate = actualDataItem['date'];
+        final String actualTimeRange = actualDataItem['timeRange']; // This is HH:MM for the 30-min slot
 
-    // Try to find matching prediction for this date/time
-    for (var doc in _predictedEnergyData) {
-      final predEnergyMap = doc['predicted_energy'] as Map<String, dynamic>?;
-      if (predEnergyMap == null) continue;
+        // We need to normalize the key from actualDataItem to match the format in _aggregatedPredicted30MinEnergy
+        final DateTime parsedActualDateTime = DateFormat('EEE MMM dd yyyy HH:mm').parse('$actualDate $actualTimeRange');
+        final String lookupKey = DateFormat('yyyy-MM-dd HH:mm').format(parsedActualDateTime);
 
-      // Check if the dates match
-      if (predEnergyMap['date'] != actualDate) continue;
 
-      // For hourly data (today view)
-      if (widget.currentFilter == 'today' && actualTime != null) {
-        try {
-          // Parse the actual time (e.g., "14:00")
-          final timeParts = actualTime.split(':');
-          final hour = int.parse(timeParts[0]);
-          final minute = int.parse(timeParts[1]);
-
-          // Convert to 12-hour format to match prediction keys (e.g., "4:45:25 PM")
-          final period = hour >= 12 ? 'PM' : 'AM';
-          final displayHour = hour > 12 ? hour - 12 : hour;
-          final predictedTimeKey = '$displayHour:${minute.toString().padLeft(2, '0')}:25 $period';
-
-          // Find matching prediction value
-          if (predEnergyMap.containsKey(predictedTimeKey)) {
-            predictedValue = _toDouble(predEnergyMap[predictedTimeKey]);
-            break; // Found a match, exit the loop
-          }
-        } catch (e) {
-          print('Error parsing time: $e');
+        if (_aggregatedPredicted30MinEnergy.containsKey(lookupKey)) {
+          predictedValue = _aggregatedPredicted30MinEnergy[lookupKey]!;
         }
-      }
-      // For weekly/daily view - use the total_30min if available
-      else if (predEnergyMap.containsKey('total_30min')) {
-        predictedValue = _toDouble(predEnergyMap['total_30min']);
-        break; // Found a match, exit the loop
-      }
+        break;
+
+      case 'week':
+      case 'month':
+        final String actualDate = actualDataItem['date'];
+        if (_aggregatedPredictedDailyEnergy.containsKey(actualDate)) {
+          final double predicted30MinSum = _aggregatedPredictedDailyEnergy[actualDate]!;
+          // For 'week' and 'month', we sum the 30-min predictions and add to the total actual for the day.
+          // This shows the impact of predictions on the daily total.
+          predictedValue = actualValue + predicted30MinSum;
+        }
+        break;
+
+      case 'year':
+        final DateTime actualMonthStart = actualDataItem['month'] as DateTime;
+        final String monthlyKey = DateFormat('MMM yyyy').format(actualMonthStart);
+        if (_aggregatedPredictedMonthlyEnergy.containsKey(monthlyKey)) {
+          final double predicted30MinSum = _aggregatedPredictedMonthlyEnergy[monthlyKey]!;
+          // For 'year', we sum the 30-min predictions and add to the total actual for the month.
+          // This shows the impact of predictions on the monthly total.
+          predictedValue = actualValue + predicted30MinSum;
+        }
+        break;
     }
 
-    // CRITICAL FIX: Ensure predicted is always >= actual
-    // If predicted is less than actual, set it equal to actual
+    // Final safeguard: ensure predicted is never less than actual.
+    // This is mostly for floating point edge cases if the above logic results in predicted < actual.
     if (predictedValue < actualValue) {
       predictedValue = actualValue;
       print('⚠️ Predicted energy was less than actual ($actualValue). Set to actual value.');
@@ -952,6 +1041,7 @@ class _EnergyTabState extends State<EnergyTab>
 
     return predictedValue;
   }
+
   Map<String, double> _calculateEnergySavings() {
     if (_selectedMetric != 'energy' || !_showEnergySavings) {
       return {'totalSavings': 0.0, 'percentageSavings': 0.0};

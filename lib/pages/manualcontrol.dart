@@ -1273,7 +1273,7 @@ class _ManualControlTabState extends State<ManualControlTab>
                   inactiveColor: lightBlue,
                   onChanged: (values) {
                     // Add minimum distance constraint (2 degrees in this case)
-                    const minDistance = 2.0;
+                    const minDistance = 1.0;
                     if ((values.end - values.start).abs() >= minDistance) {
                       setState(() {
                         temperatureRange = values;
@@ -1423,7 +1423,7 @@ class _ManualControlTabState extends State<ManualControlTab>
           const SizedBox(height: 20),
           // Day Settings
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(0),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
             ),

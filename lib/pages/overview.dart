@@ -251,19 +251,32 @@ class _OverviewTabState extends State<OverviewTab> {
     if (widget.currentFilter != 'today') return;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+
       final now = DateTime.now();
       final currentHour = now.hour;
 
-      // Calculate the position to scroll to (each item has roughly 60px height + dividers)
-      final targetPosition = currentHour * 70.0;
+      // Find the index of the current hour
+      final aggregatedData = _getAggregatedReadings();
+      final currentIndex = aggregatedData.indexWhere((item) => _toInt(item['hour']) == currentHour);
 
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          targetPosition,
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeInOut,
-        );
-      }
+      if (currentIndex == -1) return;
+
+      // Calculate the position to scroll to
+      // We'll estimate 60px for header and 56px per item (adjust based on your actual item height)
+      final estimatedItemHeight = 56.0;
+      final headerHeight = 60.0;
+      final targetPosition = (currentIndex * estimatedItemHeight) - (headerHeight / 2);
+
+      // Ensure we don't scroll past the end
+      final maxScroll = _scrollController.position.maxScrollExtent;
+      final adjustedPosition = targetPosition.clamp(0.0, maxScroll);
+
+      _scrollController.animateTo(
+        adjustedPosition,
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOut,
+      );
     });
   }
 

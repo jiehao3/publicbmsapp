@@ -9,6 +9,7 @@ import '../main.dart';
 import '../services/mongodb.dart';
 import 'summary.dart'; // your separate summary page
 import '../services/notification_service.dart' as notif;
+import 'package:flutter_map_cache/flutter_map_cache.dart'; // Corrected import
 
 class LocationData {
   final String name;
