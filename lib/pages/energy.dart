@@ -1015,59 +1015,95 @@ class _EnergyTabState extends State<EnergyTab>
   }
 
   // MODIFIED: _getPredictedEnergyValue to use aggregated data based on filter
+  // FIXED: _getPredictedEnergyValue with consistent 12% maximum savings
   double _getPredictedEnergyValue(Map<String, dynamic> actualDataItem, double actualValue) {
-    // Default to a value guaranteed to be higher or equal if no specific prediction is found
-    // This handles cases where actualValue is 0 or very small, ensuring predicted is visibly higher.
-    double predictedValue = actualValue + (actualValue * 0.05).clamp(0.01, double.infinity);
+    // Calculate the theoretical maximum predicted energy (12% savings means predicted is actualValue / 0.88)
+    final double maxPredictedEnergy = actualValue / 0.88; // This gives exactly 12% savings
+
+    // Default fallback: assume 5% savings if no prediction data found
+    double predictedValue = actualValue / 0.95; // 5% savings default
+
+    // Debug logging
+    print('=== PREDICTION DEBUG ===');
+    print('Actual: $actualValue');
+    print('Max allowed predicted (12% savings): $maxPredictedEnergy');
 
     switch (widget.currentFilter) {
       case 'today':
         final String actualDate = actualDataItem['date'];
-        final String actualTimeRange = actualDataItem['timeRange']; // This is HH:MM for the 30-min slot
+        final String actualTimeRange = actualDataItem['timeRange'];
 
-        // We need to normalize the key from actualDataItem to match the format in _aggregatedPredicted30MinEnergy
-        final DateTime parsedActualDateTime = DateFormat('EEE MMM dd yyyy HH:mm').parse('$actualDate $actualTimeRange');
-        final String lookupKey = DateFormat('yyyy-MM-dd HH:mm').format(parsedActualDateTime);
+        try {
+          final DateTime parsedActualDateTime = DateFormat('EEE MMM dd yyyy HH:mm').parse('$actualDate $actualTimeRange');
+          final String lookupKey = DateFormat('yyyy-MM-dd HH:mm').format(parsedActualDateTime);
 
+          print('Today lookup key: $lookupKey');
 
-        if (_aggregatedPredicted30MinEnergy.containsKey(lookupKey)) {
-          predictedValue = _aggregatedPredicted30MinEnergy[lookupKey]!;
+          if (_aggregatedPredicted30MinEnergy.containsKey(lookupKey)) {
+            final double rawPredicted = _aggregatedPredicted30MinEnergy[lookupKey]!;
+            print('Raw predicted from DB: $rawPredicted');
+
+            // Cap the predicted value to ensure maximum 12% savings
+            predictedValue = math.min(rawPredicted, maxPredictedEnergy);
+          }
+        } catch (e) {
+          print('Error in today prediction lookup: $e');
         }
         break;
 
       case 'week':
       case 'month':
         final String actualDate = actualDataItem['date'];
+        print('Week/Month lookup key: $actualDate');
+
         if (_aggregatedPredictedDailyEnergy.containsKey(actualDate)) {
-          final double predicted30MinSum = _aggregatedPredictedDailyEnergy[actualDate]!;
-          // For 'week' and 'month', we sum the 30-min predictions and add to the total actual for the day.
-          // This shows the impact of predictions on the daily total.
-          predictedValue = math.max(predicted30MinSum, actualValue * 0.90); // At most 10% savings
+          final double rawPredicted = _aggregatedPredictedDailyEnergy[actualDate]!;
+          print('Raw predicted from DB: $rawPredicted');
+
+          // Cap the predicted value to ensure maximum 12% savings
+          predictedValue = math.min(rawPredicted, maxPredictedEnergy);
         }
         break;
 
       case 'year':
         final DateTime actualMonthStart = actualDataItem['month'] as DateTime;
         final String monthlyKey = DateFormat('MMM yyyy').format(actualMonthStart);
+        print('Year lookup key: $monthlyKey');
+
         if (_aggregatedPredictedMonthlyEnergy.containsKey(monthlyKey)) {
-          final double predicted30MinSum = _aggregatedPredictedMonthlyEnergy[monthlyKey]!;
-          // For 'year', we sum the 30-min predictions and add to the total actual for the month.
-          // This shows the impact of predictions on the monthly total.
-          predictedValue = math.max(predicted30MinSum, actualValue * 0.90); // At most 10% savings
+          final double rawPredicted = _aggregatedPredictedMonthlyEnergy[monthlyKey]!;
+          print('Raw predicted from DB: $rawPredicted');
+
+          // Cap the predicted value to ensure maximum 12% savings
+          predictedValue = math.min(rawPredicted, maxPredictedEnergy);
         }
         break;
     }
 
-    // Final safeguard: ensure predicted is never less than actual.
-    // This is mostly for floating point edge cases if the above logic results in predicted < actual.
+    // Final safety checks
+
+    // 1. Ensure predicted is never less than actual (no negative savings)
     if (predictedValue < actualValue) {
-      predictedValue = actualValue;
-      print('⚠️ Predicted energy was less than actual ($actualValue). Set to actual value.');
+      predictedValue = actualValue; // 0% savings
+      print('⚠️ Predicted was less than actual. Set to 0% savings.');
     }
+
+    // 2. Double-check that savings don't exceed 12%
+    final double actualSavingsPercent = ((predictedValue - actualValue) / predictedValue) * 100;
+    if (actualSavingsPercent > 12.0) {
+      predictedValue = actualValue / 0.88; // Force exactly 12% savings
+      print('⚠️ Savings exceeded 12%. Capped to exactly 12%.');
+    }
+
+    final double finalSavingsPercent = ((predictedValue - actualValue) / predictedValue) * 100;
+    print('Final predicted: $predictedValue');
+    print('Final savings: ${(predictedValue - actualValue).toStringAsFixed(2)} kWh (${finalSavingsPercent.toStringAsFixed(1)}%)');
+    print('========================');
 
     return predictedValue;
   }
 
+// Also update your _calculateEnergySavings method to handle edge cases better:
   Map<String, double> _calculateEnergySavings() {
     if (_selectedMetric != 'energy' || !_showEnergySavings) {
       return {'totalSavings': 0.0, 'percentageSavings': 0.0};
@@ -1085,19 +1121,23 @@ class _EnergyTabState extends State<EnergyTab>
       totalPredicted += predicted;
     }
 
-    // Ensure we don't divide by zero
-    if (totalPredicted == 0) {
+    // Handle edge cases
+    if (totalPredicted == 0 || totalPredicted <= totalActual) {
       return {'totalSavings': 0.0, 'percentageSavings': 0.0};
     }
 
     final savings = totalPredicted - totalActual;
     final percentage = (savings / totalPredicted) * 100;
 
+    // Cap percentage at 12% just in case
+    final cappedPercentage = math.min(percentage, 12.0);
+
     return {
       'totalSavings': savings,
-      'percentageSavings': percentage,
+      'percentageSavings': cappedPercentage,
     };
   }
+
 }
 
 
