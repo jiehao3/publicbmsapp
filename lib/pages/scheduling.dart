@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:bmsapp/services/mongodb.dart';
-import 'animations/animated_feedback.dart';
+import '../services/notification_service.dart' as notif;
 
 class SchedulingTab extends StatefulWidget {
   final String building;
@@ -13,6 +13,7 @@ class SchedulingTab extends StatefulWidget {
 class _SchedulingTabState extends State<SchedulingTab>
     with AutomaticKeepAliveClientMixin {
   late final String _buildingId;
+  final notif.NotificationService _notificationService = notif.NotificationService();
   late final String _floorPlanId;
   String _selectedFilter = 'Today';
   DateTime _selectedDate = DateTime.now();
@@ -764,9 +765,17 @@ class _SchedulingTabState extends State<SchedulingTab>
                   await MongoService.addEvent(newEvent);
                   await _loadEvents();
                   Navigator.pop(context);
-                  AnimatedFeedback.showSuccess(context);
+                  _notificationService.showNotification(
+                    context,
+                    'Event added successfully',
+                    type: notif.NotificationType.success,
+                  );
                 } catch (e) {
-                  AnimatedFeedback.showError(context);
+                  _notificationService.showNotification(
+                    context,
+                    'Failed to add event',
+                    type: notif.NotificationType.error,
+                  );
                 }
               },
               child: const Text('Add Event'),
@@ -797,28 +806,28 @@ class _SchedulingTabState extends State<SchedulingTab>
                   await MongoService.deleteEvent(eventId);
                   // Close the confirmation dialog first
                   Navigator.of(context).pop();
-
                   // If called from calendar day events dialog, close that too
                   if (fromCalendarDialog) {
                     Navigator.of(context).pop();
                   }
-
-                  AnimatedFeedback.showSuccess(context);
+                  _notificationService.showNotification(
+                    context,
+                    'Event deleted successfully',
+                    type: notif.NotificationType.success,
+                  );
                   await _loadEvents(); // Refresh events list
                 } catch (e) {
                   // Close the confirmation dialog first
                   Navigator.of(context).pop();
-
                   // If called from calendar day events dialog, close that too
                   if (fromCalendarDialog) {
                     Navigator.of(context).pop();
                   }
-
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to delete event: $e')),
-                    );
-                  }
+                  _notificationService.showNotification(
+                    context,
+                    'Failed to delete event',
+                    type: notif.NotificationType.error,
+                  );
                 }
               } else {
                 Navigator.of(context).pop();

@@ -232,13 +232,19 @@ class _EnergyTabState extends State<EnergyTab>
 
   double _toDouble(dynamic value) {
     if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) {
+    double result;
+    if (value is double) {
+      result = value;
+    } else if (value is int) {
+      result = value.toDouble();
+    } else if (value is String) {
       final parsed = double.tryParse(value);
-      return parsed ?? 0.0;
+      result = parsed ?? 0.0;
+    } else {
+      result = 0.0;
     }
-    return 0.0;
+    // Cap energy values at 0 (no negative values)
+    return result < 0 ? 0.0 : result;
   }
 
   int _toInt(dynamic value) {
@@ -969,6 +975,26 @@ class _EnergyTabState extends State<EnergyTab>
   double _getMaxValue(List<Map<String, dynamic>> data, String metric) {
     if (data.isEmpty) return 10;
     final values = data.map((d) => _toDouble(d[metric])).toList();
+
+    // If showing energy savings, also consider predicted values
+    if (_showEnergySavings && metric == 'energy') {
+      final predictedValues = data.map((item) {
+        final actualValue = _toDouble(item[metric]);
+        return _getPredictedEnergyValue(item, actualValue);
+      }).toList();
+
+      // Combine actual and predicted values to find the true maximum
+      final allValues = [...values, ...predictedValues];
+      final max = allValues.reduce((a, b) => a > b ? a : b);
+
+      // Cap the maximum at a reasonable value to prevent extreme scaling
+      final cappedMax = max > (values.reduce((a, b) => a > b ? a : b) * 3)
+          ? values.reduce((a, b) => a > b ? a : b) * 2
+          : max;
+
+      return (cappedMax * 1.2).ceilToDouble();
+    }
+
     final max = values.reduce((a, b) => a > b ? a : b);
     return (max * 1.2).ceilToDouble(); // Add 20% padding and round up
   }
@@ -1016,7 +1042,7 @@ class _EnergyTabState extends State<EnergyTab>
           final double predicted30MinSum = _aggregatedPredictedDailyEnergy[actualDate]!;
           // For 'week' and 'month', we sum the 30-min predictions and add to the total actual for the day.
           // This shows the impact of predictions on the daily total.
-          predictedValue = actualValue + predicted30MinSum;
+          predictedValue = math.max(predicted30MinSum, actualValue * 0.90); // At most 10% savings
         }
         break;
 
@@ -1027,7 +1053,7 @@ class _EnergyTabState extends State<EnergyTab>
           final double predicted30MinSum = _aggregatedPredictedMonthlyEnergy[monthlyKey]!;
           // For 'year', we sum the 30-min predictions and add to the total actual for the month.
           // This shows the impact of predictions on the monthly total.
-          predictedValue = actualValue + predicted30MinSum;
+          predictedValue = math.max(predicted30MinSum, actualValue * 0.90); // At most 10% savings
         }
         break;
     }

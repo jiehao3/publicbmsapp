@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../services/mongodb.dart';
-import 'animations/animated_feedback.dart';
 import '../services/notification_service.dart' as notif;
 
 class ManualControlTab extends StatefulWidget {
@@ -194,10 +193,18 @@ class _ManualControlTabState extends State<ManualControlTab>
       setState(() => isLoading = false);
 
       // Show success message
-      AnimatedFeedback.showSuccess(context);
+      _notificationService.showNotification(
+        context,
+        'Schedule settings saved successfully',
+        type: notif.NotificationType.success,
+      );
     } catch (e) {
       setState(() => isLoading = false);
-      AnimatedFeedback.showError(context);
+      _notificationService.showNotification(
+        context,
+        'Failed to save settings',
+        type: notif.NotificationType.error,
+      );
     }
   }
 
