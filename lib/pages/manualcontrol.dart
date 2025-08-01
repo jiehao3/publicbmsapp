@@ -688,7 +688,12 @@ class _ManualControlTabState extends State<ManualControlTab>
                                 } else if (setPoint is! double && setPoint is! int) {
                                   setPoint = 24.0;
                                 }
-                                final fanMode = unitData['Fan_Status'] ?? 'MID';
+                                String fanMode = unitData['Fan_Status'] ?? (widget.building == 'SPGG' ? 'MED' : 'MID');
+                                // Convert fan speed for SPGG if needed
+                                if (widget.building == 'SPGG') {
+                                  if (fanMode == 'MID') fanMode = 'MED';
+                                  else if (fanMode == 'VERY LOW') fanMode = 'QUIET';
+                                }
                                 final double safeTemp = setPoint as double;
                                 await MongoService.turnOnAircon(
                                   buildingName: widget.building,
@@ -977,25 +982,50 @@ class _ManualControlTabState extends State<ManualControlTab>
       Function(String) onFanSpeedChanged,
       ) {
     // Fan speed mapping
-    final Map<String, int> fanMap = {
-      'AUTO': 0,
-      'VERY LOW': 1,
-      'LOW': 2,
-      'MID': 3,
-      'HIGH': 4,
-      'VERY HIGH': 5,
-    };
+    // Building-specific fan speed mapping
+    final Map<String, int> fanMap;
+    final Map<int, String> reverseFanMap;
 
-    final Map<int, String> reverseFanMap = {
-      0: 'AUTO',
-      1: 'VERY LOW',
-      2: 'LOW',
-      3: 'MID',
-      4: 'HIGH',
-      5: 'VERY HIGH',
-    };
+    if (widget.building == 'SPGG') {
+      fanMap = {
+        'QUIET': 2,
+        'LOW': 3,
+        'MED': 4,
+        'HIGH': 5,
+      };
+      reverseFanMap = {
+        2: 'QUIET',
+        3: 'LOW',
+        4: 'MED',
+        5: 'HIGH',
+      };
+    } else {
+      // W512 and other buildings
+      fanMap = {
+        'AUTO': 0,
+        'VERY LOW': 1,
+        'LOW': 2,
+        'MID': 3,
+        'HIGH': 4,
+        'VERY HIGH': 5,
+      };
+      reverseFanMap = {
+        0: 'AUTO',
+        1: 'VERY LOW',
+        2: 'LOW',
+        3: 'MID',
+        4: 'HIGH',
+        5: 'VERY HIGH',
+      };
+    }
 
-    double currentValue = fanMap[currentSpeed]?.toDouble() ?? 3.0;
+    // Find current value, with building-specific defaults
+    double currentValue;
+    if (widget.building == 'SPGG') {
+      currentValue = fanMap[currentSpeed]?.toDouble() ?? 4.0; // Default to MED (4)
+    } else {
+      currentValue = fanMap[currentSpeed]?.toDouble() ?? 3.0; // Default to MID (3)
+    }
 
     return SliderTheme(
       data: SliderThemeData(
@@ -1009,9 +1039,9 @@ class _ManualControlTabState extends State<ManualControlTab>
         trackHeight: 4,
       ),
       child: Slider(
-        min: 0,
-        max: 5,
-        divisions: 5,
+        min: widget.building == 'SPGG' ? 2.0 : 0.0,
+        max: widget.building == 'SPGG' ? 5.0 : 5.0,
+        divisions: widget.building == 'SPGG' ? 3 : 5,
         value: currentValue,
         label: reverseFanMap[currentValue.round()],
         onChanged: isEnabled
